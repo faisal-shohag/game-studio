@@ -1,0 +1,339 @@
+## UI kit (autoload "UI"): palette, theme, chunky buttons, icons, screen navigation, settings.
+extends Node
+
+const Icon = preload("res://ui/icon.gd")
+const COLORS := [Color("ff4757"), Color("2ed573"), Color("ffc312"), Color("1e90ff")]
+const NAMES := ["Red", "Green", "Yellow", "Blue"]
+const INK := Color("23194d")  # outlines and dark text
+const ACCENT := Color("ff9f1a")
+const LOCKED := Color("8c87b8")
+const FONT := preload("res://assets/fonts/LilitaOne-Regular.ttf")
+const SETTINGS_PATH := "user://settings.cfg"
+const NAME_MAX := 16
+const ADJECTIVES := ["Lucky", "Happy", "Brave", "Swift", "Super", "Mighty", "Crazy", "Royal", "Sunny", "Ninja", "Turbo", "Jolly"]
+const ANIMALS := ["Tiger", "Panda", "Fox", "Lion", "Owl", "Shark", "Koala", "Eagle", "Bear", "Wolf", "Cobra", "Yak"]
+
+signal _dialog_closed(yes: bool)
+
+var settings := ConfigFile.new()
+var history := []  # [what, props] of screens to return to
+var current: Node
+var current_entry := []
+var _dialog: CanvasLayer
+
+var player_name: String:
+	get:
+		return settings.get_value("player", "name", "")
+	set(v):
+		settings.set_value("player", "name", v)
+		settings.save(SETTINGS_PATH)
+
+
+func _ready() -> void:
+	settings.load(SETTINGS_PATH)
+	get_tree().quit_on_go_back = false  # Android back goes through back(); project setting alone didn't stick
+	get_tree().root.theme = _make_theme()
+	ThemeDB.fallback_font = FONT  # for controls the root theme can't reach
+	var grad := GradientTexture2D.new()
+	grad.gradient = Gradient.new()
+	grad.gradient.set_color(0, Color("7b5cff"))
+	grad.gradient.set_color(1, Color("2a1a78"))
+	grad.fill = GradientTexture2D.FILL_RADIAL
+	grad.fill_from = Vector2(0.5, 0.3)
+	grad.fill_to = Vector2(1.2, 1.1)
+	var bg := TextureRect.new()
+	bg.texture = grad
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var layer := CanvasLayer.new()
+	layer.layer = -1
+	layer.add_child(bg)
+	add_child(layer)
+
+
+func random_name() -> String:
+	return "%s %s %d" % [ADJECTIVES.pick_random(), ANIMALS.pick_random(), randi_range(10, 99)]
+
+
+# --- navigation ---------------------------------------------------------------
+
+## Open a screen on top of the history. `what`: res path, PackedScene or script.
+## `props` are set on the new node before it enters the tree.
+func go(what, props := {}) -> void:
+	if current:
+		history.append(current_entry)
+	_show(what, props, 1)
+
+
+## Open a screen and forget the history (Home, after a game).
+func reset_to(what, props := {}) -> void:
+	history.clear()
+	_show(what, props, -1)
+
+
+## Reopen the current screen fresh (Play Again). `overrides` replace some props.
+func restart(overrides := {}) -> void:
+	var props: Dictionary = current_entry[1].duplicate()
+	props.merge(overrides, true)
+	_show(current_entry[0], props, 1)
+
+
+## Android back / back arrow. A screen can take over with `on_back()`.
+func back() -> void:
+	if _dialog:
+		_dialog_closed.emit(false)
+	elif current and current.has_method("on_back"):
+		current.on_back()
+	elif history.is_empty():
+		get_tree().quit()
+	else:
+		var e: Array = history.pop_back()
+		_show(e[0], e[1], -1)
+
+
+## Modal yes/no card over everything. Back (or the left button) answers no.
+func confirm(title: String, text: String, yes := "LEAVE", no := "STAY") -> bool:
+	if _dialog:
+		return false
+	var view := get_viewport().get_visible_rect().size
+	_dialog = CanvasLayer.new()
+	_dialog.layer = 50
+	var root := Control.new()
+	root.theme = get_tree().root.theme  # themes don't flow through CanvasLayers
+	root.size = view
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.size = view
+	root.add_child(dim)
+	var center := CenterContainer.new()
+	center.size = view
+	root.add_child(center)
+	var card := PanelContainer.new()
+	var style := box(INK.lightened(0.2), 14, 48)
+	style.set_content_margin_all(56)
+	card.add_theme_stylebox_override("panel", style)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 36)
+	col.add_child(label(title, 80))
+	col.add_child(label(text, 44, Color(1, 1, 1, 0.85)))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 30)
+	var b_no := button(no, COLORS[1], Vector2(340, 140))
+	b_no.pressed.connect(_dialog_closed.emit.bind(false))
+	row.add_child(b_no)
+	var b_yes := button(yes, COLORS[0], Vector2(340, 140))
+	b_yes.pressed.connect(_dialog_closed.emit.bind(true))
+	row.add_child(b_yes)
+	col.add_child(row)
+	card.add_child(col)
+	center.add_child(card)
+	_dialog.add_child(root)
+	get_tree().root.add_child(_dialog)
+	card.resized.connect(func(): card.pivot_offset = card.size / 2)
+	card.scale = Vector2(0.7, 0.7)
+	card.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).tween_property(card, "scale", Vector2.ONE, 0.25)
+	var answer: bool = await _dialog_closed
+	_dialog.queue_free()
+	_dialog = null
+	return answer
+
+
+## Pill message that slides down from the top, waits, and slides away.
+func toast(text: String, color := INK) -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 40
+	var pill := Button.new()  # a Button only for its auto-sized styled box; it ignores taps
+	pill.theme = get_tree().root.theme
+	pill.text = text
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pill.add_theme_font_size_override("font_size", 46)
+	pill.add_theme_stylebox_override("normal", box(color, 10, 60))
+	layer.add_child(pill)
+	get_tree().root.add_child(layer)
+	await get_tree().process_frame  # let the pill size itself
+	var w := get_viewport().get_visible_rect().size.x
+	pill.position = Vector2((w - pill.size.x) / 2, -200)
+	var tw := pill.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(pill, "position:y", 70.0, 0.35)
+	tw.tween_interval(1.8)
+	tw.tween_property(pill, "position:y", -200.0, 0.3).set_ease(Tween.EASE_IN)
+	tw.tween_callback(layer.queue_free)
+
+
+func reset_network() -> void:
+	multiplayer.multiplayer_peer.close()
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+
+
+var _back_frame := -1
+
+
+func _notification(what: int) -> void:
+	# one Android back press arrives twice in the same frame (window + tree); act once
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST and Engine.get_process_frames() != _back_frame:
+		_back_frame = Engine.get_process_frames()
+		back()
+
+
+func _show(what, props: Dictionary, dir: int) -> void:
+	if what is String:
+		what = load(what)
+	var node: Node = what.instantiate() if what is PackedScene else what.new()
+	for k in props:
+		node.set(k, props[k])
+	var old := current
+	current = node
+	current_entry = [what, props]
+	if old:
+		old.name = "Leaving"  # free up /root/Screen: LAN RPCs need the same path on every phone
+		old.process_mode = Node.PROCESS_MODE_DISABLED
+		var out := create_tween()
+		out.tween_property(old, "modulate:a", 0.0, 0.15)
+		out.tween_callback(old.queue_free)
+	node.name = "Screen"
+	get_tree().root.add_child(node)
+	if node is CanvasItem:
+		node.position.x = get_viewport().get_visible_rect().size.x * 0.3 * dir
+		node.modulate.a = 0.0
+		var tw := create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(node, "position:x", 0.0, 0.28)
+		tw.tween_property(node, "modulate:a", 1.0, 0.2)
+
+
+# --- widgets ------------------------------------------------------------------
+
+func box(color: Color, lip := 12, radius := 40) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = color
+	s.set_corner_radius_all(radius)
+	s.border_width_bottom = lip
+	s.border_color = color.darkened(0.3)
+	s.set_content_margin_all(24)
+	s.content_margin_bottom = 24 + lip
+	s.shadow_color = Color(0, 0, 0, 0.25)
+	s.shadow_size = 6
+	s.shadow_offset = Vector2(0, 8)
+	return s
+
+
+## Chunky colored button: thick bottom lip, pushed-in look while pressed.
+func paint(b: Button, color: Color) -> void:
+	b.add_theme_stylebox_override("normal", box(color))
+	b.add_theme_stylebox_override("hover", box(color.lightened(0.08)))
+	var pressed := box(color.darkened(0.05), 4)
+	pressed.content_margin_top += 8
+	b.add_theme_stylebox_override("pressed", pressed)
+	b.add_theme_stylebox_override("disabled", box(LOCKED))
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+
+func button(text: String, color := ACCENT, min_size := Vector2(720, 150), font_size := 64) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = min_size
+	b.add_theme_font_size_override("font_size", font_size)
+	paint(b, color)
+	bouncy(b)
+	return b
+
+
+## Big menu tile: icon on the left, title + subtitle on the right.
+func tile(color: Color, icon_node: Control, title: String, subtitle := "", min_size := Vector2(900, 220), title_size := 64) -> Button:
+	var b := button("", color, min_size)
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	row.offset_left = 36
+	row.offset_right = -36
+	row.offset_bottom = -12
+	row.add_theme_constant_override("separation", 30)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(icon_node)
+	var col := VBoxContainer.new()
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(label(title, title_size, Color.WHITE, HORIZONTAL_ALIGNMENT_LEFT))
+	if subtitle != "":
+		col.add_child(label(subtitle, maxi(int(title_size * 0.55), 30), Color(1, 1, 1, 0.9), HORIZONTAL_ALIGNMENT_LEFT))
+	row.add_child(col)
+	b.add_child(row)
+	return b
+
+
+func label(text: String, font_size := 52, color := Color.WHITE, align := HORIZONTAL_ALIGNMENT_CENTER) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.horizontal_alignment = align
+	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_color_override("font_color", color)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+
+func icon(kind: String, color := Color.WHITE, size := 120, count := 1) -> Control:
+	var i := Icon.new()
+	i.kind = kind
+	i.color = color
+	i.count = count
+	i.custom_minimum_size = Vector2(size, size)
+	i.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return i
+
+
+## Squish on press, spring back on release.
+func bouncy(c: Control) -> void:
+	c.resized.connect(func(): c.pivot_offset = c.size / 2)
+	if c is BaseButton:
+		c.pressed.connect(Sfx.play.bind("tap"))
+		c.button_down.connect(func(): _scale(c, 0.92))
+		c.button_up.connect(func(): _scale(c, 1.0))
+
+
+func _scale(c: Control, s: float) -> void:
+	c.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).tween_property(c, "scale", Vector2(s, s), 0.15)
+
+
+## Staggered pop-in for a screen's widgets.
+func pop_in(nodes: Array) -> void:
+	for i in nodes.size():
+		var n: CanvasItem = nodes[i]
+		n.modulate.a = 0.0
+		var tw := n.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_interval(0.08 + i * 0.07)
+		tw.tween_property(n, "modulate:a", 1.0, 0.2)
+
+
+## Endless gentle pulse (e.g. the PLAY button). Returns the tween so it can be killed.
+func pulse(c: Control) -> Tween:
+	var tw := c.create_tween().set_loops().set_trans(Tween.TRANS_SINE)
+	tw.tween_property(c, "scale", Vector2(1.06, 1.06), 0.5)
+	tw.tween_property(c, "scale", Vector2.ONE, 0.5)
+	return tw
+
+
+func _make_theme() -> Theme:
+	var t := Theme.new()
+	t.default_font = FONT
+	t.default_font_size = 52
+	for type in ["Label", "Button"]:
+		t.set_color("font_outline_color", type, INK)
+		t.set_constant("outline_size", type, 14)
+	t.set_color("font_color", "Label", Color.WHITE)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		t.set_color(c, "Button", Color.WHITE)
+	t.set_color("font_disabled_color", "Button", Color(1, 1, 1, 0.75))
+	t.set_stylebox("normal", "Button", box(ACCENT))
+	t.set_stylebox("hover", "Button", box(ACCENT.lightened(0.08)))
+	t.set_stylebox("pressed", "Button", box(ACCENT.darkened(0.05), 4))
+	t.set_stylebox("disabled", "Button", box(LOCKED))
+	t.set_stylebox("focus", "Button", StyleBoxEmpty.new())
+	var field := box(Color.WHITE, 8, 36)
+	field.border_color = Color("c9c3f0")
+	t.set_stylebox("normal", "LineEdit", field)
+	t.set_stylebox("focus", "LineEdit", StyleBoxEmpty.new())
+	t.set_color("font_color", "LineEdit", INK)
+	t.set_color("font_placeholder_color", "LineEdit", Color(INK, 0.4))
+	t.set_color("caret_color", "LineEdit", INK)
+	t.set_color("selection_color", "LineEdit", Color(COLORS[3], 0.3))
+	return t

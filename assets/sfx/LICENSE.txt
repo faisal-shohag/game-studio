@@ -1,0 +1,7 @@
+Sound effects from Kenney (www.kenney.nl), licensed CC0 1.0 Universal (public domain):
+  Casino Audio      -> dice_*.ogg
+  Impact Sounds     -> hop_*.ogg, capture.ogg
+  Interface Sounds  -> home.ogg, tap.ogg (toggle_002), no_move.ogg, your_turn.ogg (maximize_002)
+  dice_*, hop_* are compressed + limited copies (louder rattle)
+  Music Jingles     -> win.ogg (jingles_PIZZI00), lose.ogg (jingles_PIZZI01)
+https://creativecommons.org/publicdomain/zero/1.0/

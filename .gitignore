@@ -1,0 +1,8 @@
+# Godot cache / imports (regenerated on open)
+.godot/
+
+# Exported builds
+build/
+*.apk
+*.aab
+*.idsig

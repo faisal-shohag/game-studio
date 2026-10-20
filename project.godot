@@ -1,0 +1,42 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Game Studio"
+run/main_scene="res://ui/boot.tscn"
+config/quit_on_go_back=false
+config/features=PackedStringArray("4.7")
+config/icon="res://assets/brand/icon_192.png"
+boot_splash/bg_color=Color(0.9647, 0.9647, 0.9843, 1)
+boot_splash/image="res://assets/brand/splash.png"
+boot_splash/minimum_display_time=1500
+
+[autoload]
+
+UI="*res://core/ui_kit.gd"
+Sfx="*res://core/sfx.gd"
+
+[display]
+
+window/size/viewport_width=1080
+window/size/viewport_height=1920
+window/size/window_width_override=432
+window/size/window_height_override=768
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep_width"
+window/handheld/orientation=1
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0.11, 0.13, 0.2, 1)

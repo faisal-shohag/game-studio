@@ -1,0 +1,102 @@
+## Vector icons drawn in code, so the app needs no image assets.
+extends Control
+
+const PawnArt = preload("res://games/ludo/pawn_art.gd")
+
+var kind := ""
+var color := Color.WHITE
+var count := 1  # "pawns": how many
+var disc := Color(0, 0, 0, 0)  # optional backdrop circle for contrast
+var bob := false:  # gentle float up and down
+	set(v):
+		bob = v
+		set_process(v)
+		queue_redraw()
+
+
+func _ready() -> void:
+	set_process(bob)
+
+
+func _process(_delta: float) -> void:
+	queue_redraw()
+
+
+func _draw() -> void:
+	var u := minf(size.x, size.y) / 100.0
+	var c := size / 2
+	if bob:
+		c.y += sin(Time.get_ticks_msec() / 220.0) * 5 * u
+	var ink: Color = UI.INK
+	if disc.a > 0:
+		draw_circle(size / 2, 44 * u, disc)
+	match kind:
+		"back":
+			draw_polyline(PackedVector2Array([c + Vector2(10, -24) * u, c + Vector2(-12, 0) * u, c + Vector2(10, 24) * u]), color, 11 * u, true)
+		"pawn":
+			PawnArt.draw(self, c + Vector2(0, 46) * u, u * 0.95, color)
+		"pawns":
+			var s := minf(u * 1.8 / count, u * 0.8)
+			for i in count:
+				var x := size.x * (i + 0.5) / count
+				PawnArt.draw(self, Vector2(x, c.y + 46 * s), s, UI.COLORS[i])
+		"dice":
+			draw_rect(Rect2(c - Vector2(34, 34) * u, Vector2(68, 68) * u), ink)
+			draw_rect(Rect2(c - Vector2(30, 30) * u, Vector2(60, 60) * u), Color.WHITE)
+			for d in [Vector2(-15, -15), Vector2(0, 0), Vector2(15, 15), Vector2(15, -15), Vector2(-15, 15)]:
+				draw_circle(c + d * u, 6 * u, ink)
+		"wifi":
+			var o := c + Vector2(0, 26) * u
+			for r in [1, 2, 3]:
+				draw_arc(o, r * 17 * u, -PI * 0.78, -PI * 0.22, 20, color, 9 * u)
+			draw_circle(o, 7 * u, color)
+		"sound", "mute":
+			draw_colored_polygon(PackedVector2Array([c + Vector2(-30, -10) * u, c + Vector2(-16, -10) * u, c + Vector2(2, -28) * u,
+				c + Vector2(2, 28) * u, c + Vector2(-16, 10) * u, c + Vector2(-30, 10) * u]), color)
+			if kind == "sound":
+				draw_arc(c + Vector2(4, 0) * u, 16 * u, -PI / 3, PI / 3, 12, color, 6 * u)
+				draw_arc(c + Vector2(4, 0) * u, 28 * u, -PI / 3, PI / 3, 12, color, 6 * u)
+			else:
+				draw_line(c + Vector2(12, -12) * u, c + Vector2(34, 12) * u, color, 7 * u)
+				draw_line(c + Vector2(12, 12) * u, c + Vector2(34, -12) * u, color, 7 * u)
+		"crown":
+			var crown := PackedVector2Array([c + Vector2(-40, 30) * u, c + Vector2(-44, -24) * u, c + Vector2(-20, 0) * u,
+				c + Vector2(0, -36) * u, c + Vector2(20, 0) * u, c + Vector2(44, -24) * u, c + Vector2(40, 30) * u])
+			draw_colored_polygon(crown, UI.COLORS[2])
+			crown.append(crown[0])
+			draw_polyline(crown, ink, 6 * u, true)
+			for d in [Vector2(-22, 16), Vector2(0, 16), Vector2(22, 16)]:
+				draw_circle(c + d * u, 6 * u, UI.COLORS[0])
+		"star":
+			var pts := PackedVector2Array()
+			for k in 10:
+				pts.append(c + Vector2.from_angle(-PI / 2 + k * PI / 5) * (44 if k % 2 == 0 else 20) * u)
+			draw_colored_polygon(pts, color)
+			pts.append(pts[0])
+			draw_polyline(pts, ink, 5 * u, true)
+		"lock":
+			draw_arc(c + Vector2(0, -6) * u, 16 * u, PI, TAU, 16, color, 8 * u)
+			draw_rect(Rect2(c + Vector2(-25, -6) * u, Vector2(50, 40) * u), color)
+			draw_circle(c + Vector2(0, 12) * u, 6 * u, ink)
+		"robot":
+			draw_line(c + Vector2(0, -30) * u, c + Vector2(0, -44) * u, color, 5 * u)
+			draw_circle(c + Vector2(0, -46) * u, 6 * u, color)
+			draw_rect(Rect2(c + Vector2(-34, -30) * u, Vector2(68, 54) * u), color)
+			draw_circle(c + Vector2(-14, -6) * u, 8 * u, ink)
+			draw_circle(c + Vector2(14, -6) * u, 8 * u, ink)
+			draw_rect(Rect2(c + Vector2(-14, 10) * u, Vector2(28, 6) * u), ink)
+		"board":
+			var b := Rect2(c - Vector2(42, 42) * u, Vector2(84, 84) * u)
+			draw_rect(b.grow(4 * u), ink)
+			draw_rect(b, Color.WHITE)
+			var q := 34 * u
+			for i in 4:
+				var corner: Vector2 = [b.position, b.position + Vector2(b.size.x - q, 0), b.end - Vector2(q, q), b.position + Vector2(0, b.size.y - q)][i]
+				draw_rect(Rect2(corner, Vector2(q, q)), UI.COLORS[i])
+				draw_circle(corner + Vector2(q, q) / 2, q * 0.28, Color.WHITE)
+			var m := c
+			var h := 8 * u
+			draw_colored_polygon(PackedVector2Array([m + Vector2(-h, -h), m + Vector2(-h, h), m]), UI.COLORS[0])
+			draw_colored_polygon(PackedVector2Array([m + Vector2(-h, -h), m + Vector2(h, -h), m]), UI.COLORS[1])
+			draw_colored_polygon(PackedVector2Array([m + Vector2(h, -h), m + Vector2(h, h), m]), UI.COLORS[2])
+			draw_colored_polygon(PackedVector2Array([m + Vector2(-h, h), m + Vector2(h, h), m]), UI.COLORS[3])
