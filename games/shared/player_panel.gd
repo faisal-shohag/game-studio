@@ -4,7 +4,7 @@ extends Control
 
 signal tapped
 
-const PawnArt = preload("res://games/ludo/pawn_art.gd")
+const PawnArt = preload("res://games/shared/pawn_art.gd")
 
 var color := Color.WHITE
 var player_name := ""
@@ -15,6 +15,10 @@ var home := 0:
 var note := "":  # "Thinking...", "No moves", ... replaces the dots
 	set(v):
 		note = v
+		queue_redraw()
+var status := "":  # games without home dots ("Square 37"); shown when there's no note
+	set(v):
+		status = v
 		queue_redraw()
 var active := false:
 	set(v):
@@ -63,9 +67,10 @@ func _draw() -> void:
 	draw_circle(av, 64, Color.WHITE)
 	draw_circle(av, 58, color.lightened(0.55))
 	PawnArt.draw(self, av + Vector2(0, 40), 0.85, color)
-	if note != "":
-		draw_string_outline(UI.FONT, Vector2(162, 130), note, HORIZONTAL_ALIGNMENT_LEFT, size.x - 175, 34, 10, UI.INK)
-		draw_string(UI.FONT, Vector2(162, 130), note, HORIZONTAL_ALIGNMENT_LEFT, size.x - 175, 34, Color.WHITE)
+	var text := note if note != "" else status
+	if text != "":
+		draw_string_outline(UI.FONT, Vector2(162, 130), text, HORIZONTAL_ALIGNMENT_LEFT, size.x - 175, 34, 10, UI.INK)
+		draw_string(UI.FONT, Vector2(162, 130), text, HORIZONTAL_ALIGNMENT_LEFT, size.x - 175, 34, Color.WHITE)
 	else:
 		for i in 4:
 			var at := Vector2(180 + i * 42, 118)

@@ -14,8 +14,7 @@ const SLOTS := [[540.0, 320.0], [275.0, 230.0], [805.0, 165.0]]
 var ranking := []  # colors, winner first
 var names := []
 var me := -1  # local player's color, -1 = none (all bots)
-var captures := []
-var sixes := []
+var stats := []  # per color: one line of game-specific numbers ("Captures 2    Sixes 5")
 var can_restart := true  # LAN clients wait for the host instead
 var _ray_angle := 0.0
 var _rays_at := Vector2.ZERO
@@ -109,7 +108,7 @@ func _ready() -> void:
 		y += 70
 	# stats: one row per player, in finishing order
 	for c in ranking:
-		var row := UI.label("%s    Captures %d    Sixes %d" % [names[c], captures[c], sixes[c]], 34, UI.COLORS[c].lightened(0.35))
+		var row := UI.label("%s    %s" % [names[c], stats[c]], 34, UI.COLORS[c].lightened(0.35))
 		row.size = Vector2(1080, 50)
 		row.position = Vector2(0, y)
 		add_child(row)

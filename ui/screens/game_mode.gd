@@ -1,0 +1,25 @@
+## Any board game: pick how to play.
+extends "res://ui/screen.gd"
+
+const Games = preload("res://core/games.gd")
+
+var game := "ludo"
+
+
+func _ready() -> void:
+	title = Games.LIST[game].title
+	super()
+
+
+func build() -> void:
+	content.add_child(UI.label("How do you want to play?", 52))
+	var bots := UI.tile(UI.COLORS[3], UI.icon("robot", Color.WHITE, 170), "VS COMPUTER", "You against bots")
+	bots.pressed.connect(UI.go.bind("res://ui/screens/game_players.gd", {"game": game, "mode": "bots"}))
+	content.add_child(bots)
+	var local := UI.tile(UI.COLORS[1], UI.icon("pawns", Color.WHITE, 170, 2), "PASS & PLAY", "Friends on one phone")
+	local.pressed.connect(UI.go.bind("res://ui/screens/game_players.gd", {"game": game, "mode": "local"}))
+	content.add_child(local)
+	if Games.LIST[game].lan:
+		var lan := UI.tile(UI.COLORS[0], UI.icon("wifi", Color.WHITE, 170), "WITH FRIENDS", "Same Wi-Fi or hotspot")
+		lan.pressed.connect(UI.go.bind("res://ui/screens/lan_menu.gd"))
+		content.add_child(lan)

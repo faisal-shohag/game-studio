@@ -5,7 +5,7 @@
 extends "res://ui/screen.gd"
 
 const LudoGame = preload("res://games/ludo/ludo_game.tscn")
-const Game = preload("res://games/ludo/ludo_game.gd")
+const Games = preload("res://core/games.gd")
 const PORT := 7790
 const DISCOVERY_PORT := 7791
 const HELLO := "GAMESTUDIO_LUDO"  # broadcast: HELLO|host name
@@ -190,7 +190,7 @@ func _refresh() -> void:
 	for c in cards:
 		var card: Dictionary = cards[c]
 		var o: int = owners[c]
-		card.name.text = names[c] if o > 0 else Game.BOT_NAMES[c] if o == 0 else "Empty seat"
+		card.name.text = names[c] if o > 0 else Games.BOT_NAMES[c] if o == 0 else "Empty seat"
 		card.badge.text = "YOU" if o == me else "HOST" if o == 1 else "PLAYER" if o > 0 else "BOT" if o == 0 else "OFF"
 		card.pawn.bob = o == me
 		card.button.modulate.a = 0.45 if o == -1 else 1.0
@@ -214,7 +214,7 @@ func _on_start() -> void:
 	var full := names.duplicate()
 	for c in 4:
 		if owners[c] == 0:
-			full[c] = Game.BOT_NAMES[c]
+			full[c] = Games.BOT_NAMES[c]
 	_start.rpc(owners, full)
 
 

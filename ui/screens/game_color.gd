@@ -1,9 +1,11 @@
-## Ludo: pick colors by tapping pawns. vs Computer: tap yours, bots fill in.
+## Any board game: pick colors by tapping pawns. vs Computer: tap yours, bots fill in.
 ## Pass & Play: tap in order for P1, P2, ... (tap again to undo).
 extends "res://ui/screen.gd"
 
+const Games = preload("res://core/games.gd")
 const CORNERS := [0, 1, 3, 2]  # grid order matches board corners: red TL, green TR, blue BL, yellow BR
 
+var game := "ludo"
 var mode := "bots"
 var count := 4
 var picks := []
@@ -54,7 +56,7 @@ func _play() -> void:
 		for k in picks.size():
 			names[picks[k]] = UI.player_name if k == 0 else "Player %d" % (k + 1)
 		props["names"] = names
-	UI.go("res://games/ludo/ludo_game.tscn", props)
+	UI.go(Games.LIST[game].scene, props)
 
 
 func _tap(c: int) -> void:

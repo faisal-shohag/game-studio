@@ -1,7 +1,7 @@
-## Home: logo, playable game card, locked "coming soon" cards, name chip.
+## Home: logo, playable game cards, locked "coming soon" cards, name chip.
 extends "res://ui/screen.gd"
 
-const SOON := ["Snakes & Ladders", "Color Cards", "Carrom", "Penfight"]
+const SOON := ["Color Cards", "Carrom", "Penfight"]
 
 
 func _init() -> void:
@@ -31,9 +31,12 @@ func build() -> void:
 	content.add_child(logo)
 	content.add_child(UI.label("Classic games, together", 44, Color(1, 1, 1, 0.8)))
 
-	var ludo := UI.tile(UI.COLORS[0], UI.icon("board", Color.WHITE, 230), "LUDO", "2-4 players", Vector2(940, 300), 96)
-	ludo.pressed.connect(UI.go.bind("res://ui/screens/ludo_mode.gd"))
+	var ludo := UI.tile(UI.COLORS[0], UI.icon("board", Color.WHITE, 200), "LUDO", "2-4 players", Vector2(940, 250), 96)
+	ludo.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "ludo"}))
 	content.add_child(ludo)
+	var snakes := UI.tile(UI.COLORS[1], UI.icon("ladder", Color.WHITE, 200), "SNAKES & LADDERS", "2-4 players", Vector2(940, 250), 64)
+	snakes.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "snakes"}))
+	content.add_child(snakes)
 
 	var grid := GridContainer.new()
 	grid.columns = 2

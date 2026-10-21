@@ -2,7 +2,7 @@
 ## The 3D dice must land with the rolled value's face pointing straight up, for any yaw.
 extends SceneTree
 
-const Dice = preload("res://games/ludo/dice.gd")
+const Dice = preload("res://games/shared/dice.gd")
 
 
 func _init() -> void:

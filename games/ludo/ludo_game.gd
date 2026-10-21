@@ -4,11 +4,12 @@ extends Node2D
 const Rules = preload("res://games/ludo/ludo_rules.gd")
 const AI = preload("res://games/ludo/ludo_ai.gd")
 const BoardArt = preload("res://games/ludo/board_art.gd")
-const Pawn = preload("res://games/ludo/pawn.gd")
-const PlayerPanel = preload("res://games/ludo/player_panel.gd")
-const Dice = preload("res://games/ludo/dice.gd")
-const WinOverlay = preload("res://games/ludo/win_overlay.gd")
-const BOT_NAMES := ["Bot Rina", "Bot Max", "Bot Zoe", "Bot Leo"]
+const Pawn = preload("res://games/shared/pawn.gd")
+const PlayerPanel = preload("res://games/shared/player_panel.gd")
+const Dice = preload("res://games/shared/dice.gd")
+const WinOverlay = preload("res://games/shared/win_overlay.gd")
+const Fx = preload("res://games/shared/fx.gd")
+const Games = preload("res://core/games.gd")
 const PLACES := ["1st place", "2nd place", "3rd place"]
 const PANEL_SIZE := Vector2(400, 190)
 
@@ -62,7 +63,7 @@ func _ready() -> void:
 	if names.is_empty():
 		for c in 4:
 			var bot: bool = seats[c] == "bot" or (not owners.is_empty() and owners[c] == 0)
-			names.append(UI.player_name if c == me else BOT_NAMES[c] if bot else "Player %d" % (c + 1))
+			names.append(UI.player_name if c == me else Games.BOT_NAMES[c] if bot else "Player %d" % (c + 1))
 	_build(colors)
 	_layout()
 	_next()
@@ -325,7 +326,7 @@ func _move(t: int) -> void:
 			Sfx.play("hop")
 	pawn.z_index = 0
 	if not ev.captured.is_empty():
-		_shake()
+		Fx.shake(table)
 		Sfx.play("capture")
 		for cap in ev.captured:
 			var victim: Node2D = pawns[cap[0]][cap[1]]
@@ -335,7 +336,7 @@ func _move(t: int) -> void:
 		for cap in ev.captured:
 			pawns[cap[0]][cap[1]].z_index = 0
 	if ev.to == Rules.HOME:
-		_burst(pawn.position, UI.COLORS[c])
+		Fx.burst(table, pawn.position, UI.COLORS[c])
 		Sfx.play("home", 0.0)
 	captures[c] += ev.captured.size()
 	if c in state.winners and state.phase != "over":
@@ -351,22 +352,9 @@ func _move(t: int) -> void:
 	_next()
 
 
-## Big bouncy word over the board ("Captured!", "Bonus roll!"), then floats up and fades.
+## Big bouncy word over the board ("Captured!", "Bonus roll!").
 func _popup(text: String, color: Color, big := false) -> void:
-	var l := UI.label(text, 100 if big else 84)
-	l.add_theme_color_override("font_outline_color", color.darkened(0.45))
-	l.add_theme_constant_override("outline_size", 26)
-	l.size = Vector2(1080, 150)
-	l.position = Vector2(0, board.position.y - 75)
-	l.pivot_offset = l.size / 2
-	l.scale = Vector2(0.3, 0.3)
-	hud.add_child(l)
-	var tw := l.create_tween()
-	tw.tween_property(l, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_interval(1.1 if big else 0.45)
-	tw.tween_property(l, "position:y", l.position.y - 90, 0.4)
-	tw.parallel().tween_property(l, "modulate:a", 0.0, 0.4)
-	tw.tween_callback(l.queue_free)
+	Fx.popup(hud, text, color, board.position.y, big)
 
 
 func _show_results() -> void:
@@ -383,8 +371,7 @@ func _show_results() -> void:
 	_results.ranking = ranking
 	_results.names = names
 	_results.me = me
-	_results.captures = captures
-	_results.sixes = sixes
+	_results.stats = range(4).map(func(c): return "Captures %d    Sixes %d" % [captures[c], sixes[c]])
 	_results.can_restart = owners.is_empty() or multiplayer.is_server()
 	_results.play_again.connect(_play_again)
 	_results.home.connect(_to_menu)
@@ -398,45 +385,13 @@ func _play_again() -> void:
 		var n := names.duplicate()
 		for c in 4:
 			if owners[c] == 0:  # players who left are bots now
-				n[c] = BOT_NAMES[c]
+				n[c] = Games.BOT_NAMES[c]
 		_restart.rpc(owners, n)
 
 
 @rpc("authority", "call_local", "reliable")
 func _restart(o: Array, n: Array) -> void:
 	UI.restart({"owners": o, "names": n})
-
-
-func _shake() -> void:
-	var tw := create_tween()
-	for k in 6:
-		tw.tween_property(table, "position", Vector2(randf_range(-12, 12), randf_range(-12, 12)), 0.04)
-	tw.tween_property(table, "position", Vector2.ZERO, 0.04)
-
-
-## Confetti pop when a pawn reaches home.
-func _burst(at: Vector2, color: Color) -> void:
-	var fx := CPUParticles2D.new()
-	fx.position = at
-	fx.z_index = 10
-	fx.one_shot = true
-	fx.explosiveness = 1.0
-	fx.amount = 32
-	fx.lifetime = 0.9
-	fx.direction = Vector2.UP
-	fx.spread = 180.0
-	fx.initial_velocity_min = 250.0
-	fx.initial_velocity_max = 480.0
-	fx.gravity = Vector2(0, 700)
-	fx.scale_amount_min = 6.0
-	fx.scale_amount_max = 12.0
-	var ramp := Gradient.new()
-	ramp.set_color(0, color.lightened(0.3))
-	ramp.set_color(1, Color(UI.COLORS[2], 0.0))
-	fx.color_ramp = ramp
-	table.add_child(fx)
-	fx.emitting = true
-	get_tree().create_timer(1.5).timeout.connect(fx.queue_free)
 
 
 func _unhandled_input(e: InputEvent) -> void:

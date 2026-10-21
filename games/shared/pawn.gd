@@ -2,7 +2,7 @@
 ## spins back to base when captured.
 extends Node2D
 
-const PawnArt = preload("res://games/ludo/pawn_art.gd")
+const PawnArt = preload("res://games/shared/pawn_art.gd")
 const SIZE := 0.62  # ~60 px tall on a 66 px square
 const FOOT := 20.0  # pin stands slightly below the square's center
 

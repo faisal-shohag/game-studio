@@ -1,7 +1,7 @@
 ## Vector icons drawn in code, so the app needs no image assets.
 extends Control
 
-const PawnArt = preload("res://games/ludo/pawn_art.gd")
+const PawnArt = preload("res://games/shared/pawn_art.gd")
 
 var kind := ""
 var color := Color.WHITE
@@ -85,6 +85,27 @@ func _draw() -> void:
 			draw_circle(c + Vector2(-14, -6) * u, 8 * u, ink)
 			draw_circle(c + Vector2(14, -6) * u, 8 * u, ink)
 			draw_rect(Rect2(c + Vector2(-14, 10) * u, Vector2(28, 6) * u), ink)
+		"ladder":  # leaning ladder with a little snake curled around its foot
+			var a := c + Vector2(-22, 40) * u
+			var b := c + Vector2(22, -42) * u
+			var dir := (b - a).normalized()
+			var side := dir.orthogonal() * 15 * u
+			for pass_ in 2:
+				var w := (10.0 if pass_ == 0 else 5.0) * u
+				var col: Color = ink if pass_ == 0 else color
+				for k in range(1, 5):
+					var m := a.lerp(b, k / 5.0)
+					draw_line(m - side, m + side, col, w - 2 * u, true)
+				draw_line(a - side, b - side, col, w, true)
+				draw_line(a + side, b + side, col, w, true)
+			var body := PackedVector2Array()
+			for k in 13:
+				var t := k / 12.0
+				body.append(c + Vector2(lerpf(-40, 34, t), 34 + sin(t * TAU * 1.3) * 9) * u)
+			draw_polyline(body, ink, 15 * u, true)
+			draw_polyline(body, UI.COLORS[1], 9 * u, true)
+			draw_circle(body[body.size() - 1], 10 * u, ink)
+			draw_circle(body[body.size() - 1], 7 * u, UI.COLORS[1])
 		"board":
 			var b := Rect2(c - Vector2(42, 42) * u, Vector2(84, 84) * u)
 			draw_rect(b.grow(4 * u), ink)
