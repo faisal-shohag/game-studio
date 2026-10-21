@@ -1,17 +1,19 @@
-## Two-process LAN test through the real room screens + game. Run both (game: ludo | snakes):
+## Two-process LAN test through the real room screens + game. Run both (game: ludo | snakes | cards):
 ##   godot --headless --path . tests/run.tscn -- tests/net_game.gd host ludo
 ##   godot --headless --path . tests/run.tscn -- tests/net_game.gd join ludo
 ## Each auto-taps its own seat; both print FINAL board, which must match.
 ## The joiner only names the game to check it: the host's room tells it what to load.
 ## Add `drop` to the join command: client quits mid-game, host's bot must finish its seat.
 ## After the game the host presses Play Again; both print RESTARTED true.
+## Cards: FINAL compares public info only, and the client prints SECRET ok if every event and view
+## it received carried only its own cards.
 extends Node
 
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	var hosting := "host" in args
-	var game_id := "snakes" if "snakes" in args else "ludo"
+	var game_id := "snakes" if "snakes" in args else "cards" if "cards" in args else "ludo"
 	Engine.time_scale = 20
 	UI.settings.set_value("player", "name", "Host Hana" if hosting else "Guest Gil")  # not saved to disk
 	await get_tree().process_frame
@@ -34,12 +36,25 @@ func _ready() -> void:
 		game = get_tree().root.get_node_or_null("Screen")
 	print("loaded: ", game.scene_file_path.get_file(), " (expected ", game_id, ")")
 	print("seats: ", game.seats, " names: ", game.names)
+	var leaks := []
+	if game_id == "cards" and not hosting:
+		game.shown.connect(func(ev: Dictionary, v: Dictionary):
+			if v.has("hands") or v.has("pile") or v.me != game.me or not game.state.is_empty():
+				leaks.append(v)
+			if ev.has("ids") and ev.color != game.me and not ev.ids.is_empty():
+				leaks.append(ev))
 	for k in 200000:
 		await get_tree().process_frame
 		if k == 300 and "drop" in args:
 			print("client leaving mid-game")
 			get_tree().quit()
 			return
+		if game_id == "cards":
+			if game.view.get("phase") == "over":
+				break
+			if game._my_turn():
+				game._intent(game.Rules.legal(game.view, game.view.hand).pick_random(), game.me)
+			continue
 		var s: Dictionary = game.state
 		if s.phase == "over":
 			break
@@ -50,14 +65,21 @@ func _ready() -> void:
 		elif s.phase == "move" and game.Rules.legal_moves(s).size() > 1:  # Ludo only
 			game._intent("move", game.Rules.legal_moves(s).pick_random())
 	await get_tree().create_timer(20.0).timeout  # let client finish last animation
-	print("FINAL ", _board(game.state), " ", game.state.winners)
+	print("FINAL ", _board(game))
+	if game_id == "cards" and not hosting:
+		print("SECRET ", "ok" if leaks.is_empty() else "LEAKED %s" % [leaks[0]])
 	if hosting:  # Play Again must restart every phone
 		game._play_again()
 	await get_tree().create_timer(40.0).timeout
 	var fresh: Node = get_tree().root.get_node_or_null("Screen")
-	print("RESTARTED ", fresh != game, " ", fresh.state.phase, " ", _board(fresh.state))
+	print("RESTARTED ", fresh != game, " ", _board(fresh))
 	get_tree().quit()
 
 
-func _board(s: Dictionary) -> Array:
-	return s.tokens if s.has("tokens") else s.pos
+## What both phones must agree on. Cards: public info only (a client has no state).
+func _board(game: Node) -> Array:
+	if game.get("view") != null:
+		var v: Dictionary = game.view
+		return [v.get("phase"), v.get("discard", [-1]).back(), v.get("counts"), v.get("winners")]
+	var s: Dictionary = game.state
+	return [s.phase, s.tokens if s.has("tokens") else s.pos, s.winners]

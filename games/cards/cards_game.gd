@@ -1,8 +1,11 @@
 ## Color Cards table: opponents around the edge, draw and discard piles in the middle, your hand
 ## at the bottom. Same turn loop as snakes_game.gd (host decides, events animate one at a time),
-## but hands are secret: the screen is drawn only from `view` (Rules.view_for), never from the
-## full state, so each phone can be sent just its own view.
+## but hands are secret: only the host keeps the full state. After every action it sends each
+## phone its own view (Rules.view_for) and event (Rules.event_for); the screen is drawn only from
+## that view, even offline. Clients never run the rules on their own.
 extends Node2D
+
+signal shown(ev: Dictionary, v: Dictionary)  # every event this phone receives (tests check secrecy)
 
 const Rules = preload("res://games/cards/cards_rules.gd")
 const Ai = preload("res://games/cards/cards_ai.gd")
@@ -34,7 +37,7 @@ var names := []
 ## Local player's color. -1 = first human seat.
 var me := -1
 
-var state: Dictionary  # the whole game; only the host (or an offline phone) has it
+var state: Dictionary  # the whole game; only the host (or an offline phone) has it, else empty
 var view: Dictionary  # what this screen may show: public info + one hand
 var busy := false
 var waiting_host := false  # client sent an intent, host hasn't answered yet
@@ -55,6 +58,7 @@ var _results: Control
 var _base := -1  # seat drawn at the bottom; the others sit around from there
 var _turn_seen := -1
 var _oy := 0.0
+var _synced := []  # host: peers whose table is ready for their views
 
 
 func _ready() -> void:
@@ -64,13 +68,12 @@ func _ready() -> void:
 		for c in 4:
 			var o: int = owners[c]
 			seats[c] = "off" if o == -1 else "human" if o == my_id else "bot" if o == 0 and multiplayer.is_server() else "remote"
+		multiplayer.peer_disconnected.connect(_on_peer_left)
+		multiplayer.server_disconnected.connect(_on_host_left)
 	var colors := []
 	for c in 4:
 		if seats[c] != "off":
 			colors.append(c)
-	var order := range(108)
-	order.shuffle()
-	state = Rules.new_state(colors, order)
 	if me == -1:
 		me = seats.find("human")
 	if names.is_empty():
@@ -78,8 +81,20 @@ func _ready() -> void:
 			var bot: bool = seats[c] == "bot" or (not owners.is_empty() and owners[c] == 0)
 			names.append(UI.player_name if c == me else Games.BOT_NAMES[c] if bot else "Player %d" % (c + 1))
 	_base = me if me != -1 else colors[0]
-	view = Rules.view_for(state, me)
 	_build(colors)
+	if multiplayer.is_server():
+		var order := range(108)
+		order.shuffle()
+		state = Rules.new_state(colors, order)
+		_begin(Rules.view_for(state, me))
+	else:
+		hint.text = "Dealing..."
+		_hello.rpc_id(1)  # the host may have started already; it answers with our current view
+
+
+## First view in hand: lay out the table and start the turn loop.
+func _begin(v: Dictionary) -> void:
+	view = v
 	_place_panels()
 	_refresh()
 	_next()
@@ -143,7 +158,7 @@ func _to_menu() -> void:
 func on_back() -> void:
 	if _picker:
 		_close_picker()
-	elif view.phase == "over":
+	elif view.get("phase") == "over":
 		_to_menu()
 	elif await UI.confirm("Leave game?", "Your progress will be lost." if owners.is_empty() else "You will leave the room."):
 		_to_menu()
@@ -212,14 +227,14 @@ func _controls() -> void:
 			hint.text = "Your turn!" if not ids.is_empty() else "No match: tap the deck"
 	elif seats[c] == "human":
 		hint.text = ""  # their own move is still landing
-	elif seats[c] == "remote":
+	elif seats[c] == "remote" and owners[c] != 0:
 		hint.text = "Waiting for %s..." % names[c]
 	else:
 		hint.text = "%s is thinking..." % names[c]
 
 
 func _my_turn() -> bool:
-	return (me != -1 and view.turn == me and seats[me] == "human" and view.phase != "over"
+	return (me != -1 and not view.is_empty() and view.turn == me and seats[me] == "human" and view.phase != "over"
 		and not busy and not waiting_host and pending.is_empty() and _picker == null)
 
 
@@ -277,10 +292,34 @@ func _host_do(action: Dictionary, c: int, sender: int) -> void:
 		return
 	var ev := Rules.apply(state, c, action)
 	if ev.is_empty():
+		if sender != 0:
+			_rejected.rpc_id(sender)
 		return
 	if ev.do == "play" and ev.catchable:
 		_bots_catch(c)
+	for pc in state.colors:  # each phone gets only its own seat's view
+		var peer: int = owners[pc] if not owners.is_empty() else 0
+		if peer > 1 and peer in _synced:
+			_show.rpc_id(peer, Rules.event_for(ev, pc), Rules.view_for(state, pc))
 	_show(Rules.event_for(ev, me), Rules.view_for(state, me))
+
+
+## Client's table is ready: send its view (the game may already be under way).
+@rpc("any_peer", "reliable")
+func _hello() -> void:
+	var peer := multiplayer.get_remote_sender_id()
+	var c := owners.find(peer)
+	if multiplayer.is_server() and c != -1 and not peer in _synced:
+		_synced.append(peer)
+		_show.rpc_id(peer, {"do": "sync"}, Rules.view_for(state, c))
+
+
+## The host turned our action down (someone else caught first, ...): let the player try again.
+@rpc("authority", "reliable")
+func _rejected() -> void:
+	waiting_host = false
+	if not busy:
+		_controls()
 
 
 ## One bot opponent may notice the missing call and shout CATCH after a moment.
@@ -294,11 +333,33 @@ func _bots_catch(target: int) -> void:
 		_intent({"do": "catch", "target": target}, b)
 
 
+@rpc("authority", "reliable")
 func _show(ev: Dictionary, v: Dictionary) -> void:
+	shown.emit(ev, v)
 	waiting_host = false
+	if ev.do == "sync":
+		_begin(v)
+		return
 	pending.append([ev, v])
-	if not busy:
+	if not busy and not view.is_empty():
 		_next()
+
+
+func _on_peer_left(id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_synced.erase(id)
+	for c in 4:
+		if owners[c] == id:
+			owners[c] = 0
+			seats[c] = "bot"
+	if not busy and pending.is_empty() and view.phase != "over":
+		_next()
+
+
+func _on_host_left() -> void:
+	busy = true
+	hint.text = "Host left the game"
 
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -487,4 +548,16 @@ func _show_results() -> void:
 
 
 func _play_again() -> void:
-	UI.restart()
+	if owners.is_empty():
+		UI.restart()
+	else:
+		var n := names.duplicate()
+		for c in 4:
+			if owners[c] == 0:  # players who left are bots now
+				n[c] = Games.BOT_NAMES[c]
+		_restart.rpc(owners, n)
+
+
+@rpc("authority", "call_local", "reliable")
+func _restart(o: Array, n: Array) -> void:
+	UI.restart({"owners": o, "names": n})
