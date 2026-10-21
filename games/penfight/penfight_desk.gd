@@ -34,6 +34,8 @@ var aims := {}
 var cooldowns := {}
 ## Real-time: pen id -> 0..1 age of the "ready" pulse.
 var pulses := {}
+## Pen id -> 0..1 through a "So close!" teeter (it rocks on the edge and settles).
+var wobbles := {}
 ## Scuff marks left by hard hits this round: [desk point, angle, length].
 var scuffs := []:
 	set(v):
@@ -108,6 +110,9 @@ func _draw_cooldown(p: Dictionary) -> void:
 func _draw_one(p: Dictionary) -> void:
 	var f: float = p.fall
 	var tumble := f * f * 1.4 * (1.0 if p.id % 2 == 0 else -1.0)  # tips over as it drops
+	var wob: float = wobbles.get(p.id, 1.0)
+	if wob < 1.0:
+		tumble += sin(wob * TAU * 3.0) * 0.14 * (1.0 - wob)
 	draw_pen(self, Vector2(p.x, p.y) - HALF, p.angle + tumble, p.type, colors.get(p.id, Color.WHITE), 1.0 - f * 0.7, f, 1.0 - f * 0.35)
 
 

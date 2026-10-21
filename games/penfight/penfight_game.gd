@@ -113,6 +113,7 @@ var _snap_seq := 0  # host: last snapshot sent; guest: last one taken
 var _snaps := []  # guest: [round time, PackedFloat32Array] newest last
 var _play_t := -1.0  # guest: the round time being drawn
 var _sent_at := {}  # guest: seat -> msec its last flick went to the host
+var _was_moving := {}  # host, Real-time: pen id -> it was moving at the last slice
 
 
 func _ready() -> void:
@@ -720,7 +721,7 @@ func _animate(ev: Dictionary, after: Dictionary) -> void:
 	_shaken = false
 	for c in players:
 		players[c].active = c == ev.seat
-	Sfx.play("hop", 0.1, -6.0)
+	Sfx.play("hop", 0.1, -6.0, _pen_pitch(ev.seat))
 	set_process(true)
 
 
@@ -767,17 +768,36 @@ func _play_event(e: Dictionary) -> void:
 		"out":
 			var pen := _pen_in_frame(e.id)
 			var at := desk.to_screen(Vector2(clampf(pen.x, 0.0, Physics.W), clampf(pen.y, 0.0, Physics.H)))
-			Sfx.play("capture")
+			Sfx.play("capture", 0.06, 0.0, _pen_pitch(e.id))
 			Fx.burst(table, at, UI.COLORS[e.id])
 			_popup("Out!", UI.COLORS[e.id])
+		"close":
+			_teeter(e.id)
 
 
 ## Heavier pens clack lower: the heavier of the two sets the pitch.
 func _pitch(a: int, b: int) -> float:
-	var mass := 0.0
-	for id in [a, b]:
-		mass = maxf(mass, Physics.spec(view.pens.get(id, "gel")).mass)
-	return clampf(1.6 - mass * 0.4, 0.8, 1.2)
+	return minf(_pen_pitch(a), _pen_pitch(b))
+
+
+## A pen's own pitch: gel highest, metal lowest.
+func _pen_pitch(id: int) -> float:
+	return clampf(1.6 - Physics.spec(view.pens.get(id, "gel")).mass * 0.4, 0.8, 1.2)
+
+
+## "So close!": the pen rocks on the edge and settles.
+func _teeter(id: int) -> void:
+	_popup("So close!", UI.COLORS[id])
+	Sfx.play("no_move", 0.05, -8.0, _pen_pitch(id))
+	Input.vibrate_handheld(20)
+	var tw := create_tween()
+	tw.tween_method(_set_wobble.bind(id), 0.0, 1.0, 0.9)
+	tw.tween_callback(func(): desk.wobbles.erase(id))
+
+
+func _set_wobble(v: float, id: int) -> void:
+	desk.wobbles[id] = v
+	desk.queue_redraw()
 
 
 func _pen_in_frame(id: int) -> Dictionary:
@@ -840,8 +860,7 @@ func _so_close() -> bool:
 		var before := Rules.pen_of(_ev_before, p.id)
 		if before.is_empty() or Vector2(before.x, before.y).distance_to(Vector2(p.x, p.y)) < 1.0:
 			continue
-		_popup("So close!", UI.COLORS[p.id])
-		Fx.shake(table, 4.0)  # a nervous wobble; the desk itself never turns
+		_teeter(p.id)
 		return true
 	return false
 
@@ -873,6 +892,7 @@ func _go_live() -> void:
 	busy = false
 	_bots = {}
 	_ready_seen = {}
+	_was_moving = {}
 	_snaps = []
 	_play_t = -1.0
 	_snap_clock = SNAP_EVERY
@@ -909,7 +929,7 @@ func _live_tick(delta: float) -> void:
 		_clock += dt
 		_bots_tick()
 		var ev := Rules.live_step(state, dt)
-		for e in ev.events:
+		for e in ev.events + _close_calls():
 			_play_event(e)
 			news.events.append(e)
 		if not ev.out.is_empty():
@@ -934,6 +954,17 @@ func _live_tick(delta: float) -> void:
 	_age_pulses(delta)
 	for i in _fingers:
 		_update_finger(i)
+
+
+## Host, Real-time: pens that just came to rest right at the edge (a "close" event each).
+func _close_calls() -> Array:
+	var out := []
+	for p in state.world.pens:
+		var moving: bool = p.vx != 0.0 or p.vy != 0.0 or p.w != 0.0
+		if not moving and _was_moving.get(p.id, false) and not p.out and Physics.edge_distance(p.x, p.y) <= SO_CLOSE:
+			out.append({"type": "close", "id": p.id})
+		_was_moving[p.id] = moving
+	return out
 
 
 func _show_cooldown(c: int, cool: float, is_ready: bool) -> void:
@@ -1103,7 +1134,7 @@ func _bots_tick() -> void:
 
 
 func _flicked(c: int) -> void:
-	Sfx.play("hop", 0.1, -6.0)
+	Sfx.play("hop", 0.1, -6.0, _pen_pitch(c))
 	desk.pulses.erase(c)
 	_ready_seen[c] = false
 

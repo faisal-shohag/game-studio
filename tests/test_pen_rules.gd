@@ -167,6 +167,7 @@ func _init() -> void:
 	s = game("turns", 3, [0, 1, 2], {0: "metal", 1: "gel", 2: "marker"})
 	ev = Rules.apply_result(s, 0, result(s, [1, 2], {}, {1: 0, 2: 0}))
 	check(ev.round_winner == 0 and not ev.over and s.phase == "round_over" and s.round_wins[0] == 1, "best of 3: one round isn't enough")
+	check(s.stats[0].best == 2 and s.stats[0].knocks == 2, "two in one flick: a streak of 2")
 	check(Rules.flick(s, s.turn, {"grab": 0.0, "angle": 0.0, "power": 0.5}).is_empty(), "no flicks between rounds")
 	check(Rules.next_round(s) and s.round == 2 and s.phase == "aim" and s.turn == 1, "next round, next starter")
 	check(Rules.on_desk(s).size() == 3 and Rules.pen_of(s, 0).type == "metal", "pens back on the desk")
@@ -177,7 +178,8 @@ func _init() -> void:
 	ev = Rules.apply_result(s, 2, result(s, [1, 2]))
 	check(ev.round_winner == 0 and ev.over and s.winners == [0, 2, 1], "two round wins take the match %s" % [s.winners])
 	check(not Rules.next_round(s), "no rounds after the end")
-	check(Rules.stats(s, 0) == "Rounds 2    Knock-offs 2    Flicks 1", "stats line: %s" % Rules.stats(s, 0))
+	check(Rules.stats(s, 0) == "Rounds 2  KOs 2  Best x2  Oops 1  Flicks 1", "stats line: %s" % Rules.stats(s, 0))
+	check(Rules.stats(s, 1) == "Rounds 0  KOs 0  Oops 2  Flicks 1", "stats line with self-outs: %s" % Rules.stats(s, 1))
 
 	# --- real-time ---
 	s = game("realtime", 1, [0, 1])

@@ -37,7 +37,7 @@ static func new_state(mode: String, rounds: int, colors: Array) -> Dictionary:
 		"phase": "pick",  # pick | aim | live | round_over | over
 		"winners": [],  # final ranking once over
 		"places": [],
-		"stats": {},  # seat -> {flicks, knocks, self_outs}
+		"stats": {},  # seat -> {flicks, knocks, self_outs, best: most knock-offs in one flick}
 		"time": 0.0,  # Real-time: round clock
 		"ready_at": {},  # Real-time: seat -> round time its pen may flick again
 		"flicked_at": {},  # Real-time: seat -> round time of its last flick
@@ -45,7 +45,7 @@ static func new_state(mode: String, rounds: int, colors: Array) -> Dictionary:
 	}
 	for c in colors:
 		s.round_wins[c] = 0
-		s.stats[c] = {"flicks": 0, "knocks": 0, "self_outs": 0}
+		s.stats[c] = {"flicks": 0, "knocks": 0, "self_outs": 0, "best": 0}
 	return s
 
 
@@ -148,15 +148,19 @@ static func apply_result(s: Dictionary, c: int, sim: Dictionary) -> Dictionary:
 ## Records the pens that went over; returns {out, knocks, self_outs}.
 static func _outs(s: Dictionary, fell: Array, hit_by: Dictionary) -> Dictionary:
 	var ev := {"out": fell.duplicate(), "knocks": [], "self_outs": []}
+	var streak := {}  # knocker -> pens it knocked off this time
 	for id in fell:
 		s.out_order.append(id)
 		var by: int = hit_by.get(id, -1)
 		if by != -1 and by != id and by in s.colors:
 			s.stats[by].knocks += 1
 			ev.knocks.append([by, id])
+			streak[by] = streak.get(by, 0) + 1
 		else:
 			s.stats[id].self_outs += 1
 			ev.self_outs.append(id)
+	for by in streak:
+		s.stats[by].best = maxi(s.stats[by].best, streak[by])
 	return ev
 
 
@@ -268,7 +272,14 @@ static func live_step(s: Dictionary, dt: float) -> Dictionary:
 	return ev
 
 
-## Stats line for the results screen.
+## Stats line for the results screen: "Rounds 2  KOs 3  Best x2  Oops 1  Flicks 7" (Best only for
+## two or more in one flick, Oops only for self-outs).
 static func stats(s: Dictionary, c: int) -> String:
 	var st: Dictionary = s.stats[c]
-	return "Rounds %d    Knock-offs %d    Flicks %d" % [s.round_wins[c], st.knocks, st.flicks]
+	var parts := ["Rounds %d" % s.round_wins[c], "KOs %d" % st.knocks]
+	if st.best >= 2:
+		parts.append("Best x%d" % st.best)
+	if st.self_outs > 0:
+		parts.append("Oops %d" % st.self_outs)
+	parts.append("Flicks %d" % st.flicks)
+	return "  ".join(parts)
