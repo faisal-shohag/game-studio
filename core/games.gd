@@ -3,7 +3,7 @@
 ## "lan": the game can be played over the LAN room (menus hide "With friends" otherwise).
 
 const LIST := {
-	"ludo": {"title": "LUDO", "scene": "res://games/ludo/ludo_game.tscn", "color": 0, "lan": true},
-	"snakes": {"title": "SNAKES & LADDERS", "scene": "res://games/snakes/snakes_game.tscn", "color": 1, "lan": false},
+	"ludo": {"title": "LUDO", "name": "Ludo", "scene": "res://games/ludo/ludo_game.tscn", "color": 0, "lan": true},
+	"snakes": {"title": "SNAKES & LADDERS", "name": "Snakes & Ladders", "scene": "res://games/snakes/snakes_game.tscn", "color": 1, "lan": true},
 }
 const BOT_NAMES := ["Bot Rina", "Bot Max", "Bot Zoe", "Bot Leo"]

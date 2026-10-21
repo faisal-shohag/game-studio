@@ -1,18 +1,18 @@
 ## LAN room, for the host and for joined players.
 ## Host: runs the ENet server, broadcasts the room on UDP, hands seats to joiners, starts the game.
 ## Joiner: connects to `join_ip` here (not on the find screen) so this node already sits at
-## /root/Screen on both phones when the first RPC arrives.
+## /root/Screen on both phones when the first RPC arrives. Joiners learn the game from the host.
 extends "res://ui/screen.gd"
 
-const LudoGame = preload("res://games/ludo/ludo_game.tscn")
 const Games = preload("res://core/games.gd")
 const PORT := 7790
 const DISCOVERY_PORT := 7791
-const HELLO := "GAMESTUDIO_LUDO"  # broadcast: HELLO|host name
+const HELLO := "GAMESTUDIO"  # broadcast: HELLO|game id|host name
 const CORNERS := [0, 1, 3, 2]  # grid order matches board corners
 
 var hosting := false
 var join_ip := ""
+var game := "ludo"  # host: set by the menu; joiner: taken from the host's _sync
 var owners := [1, 0, 0, 0]  # peer id per color; 0 = bot, -1 = off
 var names := ["", "", "", ""]  # player names per color (bots/off filled at start)
 var udp := PacketPeerUDP.new()
@@ -82,7 +82,7 @@ func build() -> void:
 		multiplayer.multiplayer_peer = peer
 		names[0] = UI.player_name
 		_status_text = "Waiting for friends"
-		info.text = "Room IP: %s\nTap an empty seat: Bot or Off" % ", ".join(_lan_ips())
+		info.text = "%s room  IP: %s\nTap an empty seat: Bot or Off" % [Games.LIST[game].name, ", ".join(_lan_ips())]
 		udp.set_broadcast_enabled(true)
 		udp.set_dest_address("255.255.255.255", DISCOVERY_PORT)
 	else:
@@ -105,7 +105,7 @@ func _tick() -> void:
 	_dots = (_dots + 1) % 4
 	status.text = _status_text + ".".repeat(_dots)
 	if hosting and _dots % 2 == 0:
-		udp.put_packet(("%s|%s" % [HELLO, UI.player_name]).to_utf8_buffer())
+		udp.put_packet(("%s|%s|%s" % [HELLO, game, UI.player_name]).to_utf8_buffer())
 
 
 func _fail(why: String) -> void:
@@ -135,7 +135,7 @@ func _on_peer_joined(id: int) -> void:
 		return
 	owners[free] = id
 	names[free] = "Player"
-	_sync.rpc(owners, names)
+	_sync.rpc(game, owners, names)
 
 
 func _on_peer_left(id: int) -> void:
@@ -144,7 +144,7 @@ func _on_peer_left(id: int) -> void:
 		var who: String = names[c]
 		owners[c] = 0
 		names[c] = ""
-		_sync.rpc(owners, names)
+		_sync.rpc(game, owners, names)
 		_announce.rpc("%s left" % who, false)
 
 
@@ -156,7 +156,7 @@ func _hello(player_name: String) -> void:
 		return
 	var clean := player_name.strip_edges().left(UI.NAME_MAX)
 	names[c] = clean if clean != "" else "Player"
-	_sync.rpc(owners, names)
+	_sync.rpc(game, owners, names)
 	_announce.rpc("%s joined!" % names[c], true)
 
 
@@ -170,11 +170,13 @@ func _announce(text: String, joined: bool) -> void:
 func _cycle(c: int) -> void:
 	if hosting and owners[c] <= 0:
 		owners[c] = -1 if owners[c] == 0 else 0
-		_sync.rpc(owners, names)
+		_sync.rpc(game, owners, names)
 
 
 @rpc("authority", "call_local", "reliable")
-func _sync(o: Array, n: Array) -> void:
+func _sync(g: String, o: Array, n: Array) -> void:
+	if g in Games.LIST:
+		game = g
 	owners = o
 	names = n
 	_refresh()
@@ -186,7 +188,7 @@ func _refresh() -> void:
 		and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED)
 	grid.visible = joined
 	if joined and not hosting:
-		info.text = "%s's room" % names[owners.find(1)]
+		info.text = "%s's %s room" % [names[owners.find(1)], Games.LIST[game].name]
 	for c in cards:
 		var card: Dictionary = cards[c]
 		var o: int = owners[c]
@@ -215,9 +217,12 @@ func _on_start() -> void:
 	for c in 4:
 		if owners[c] == 0:
 			full[c] = Games.BOT_NAMES[c]
-	_start.rpc(owners, full)
+	_start.rpc(game, owners, full)
 
 
 @rpc("authority", "call_local", "reliable")
-func _start(o: Array, n: Array) -> void:
-	UI.go(LudoGame, {"owners": o, "names": n})  # becomes /root/Screen on every phone
+func _start(g: String, o: Array, n: Array) -> void:
+	if not g in Games.LIST:  # host's app has a game this phone doesn't
+		_fail("Update the app to play this game")
+		return
+	UI.go(Games.LIST[g].scene, {"owners": o, "names": n})  # becomes /root/Screen on every phone

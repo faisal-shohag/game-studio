@@ -3,6 +3,7 @@
 extends "res://ui/screen.gd"
 
 const Room = preload("res://ui/screens/lan_room.gd")
+const Games = preload("res://core/games.gd")
 
 var udp := PacketPeerUDP.new()
 var rooms := VBoxContainer.new()
@@ -68,11 +69,12 @@ func _process(_delta: float) -> void:
 	while udp.get_available_packet_count() > 0:
 		var parts := udp.get_packet().get_string_from_utf8().split("|")
 		var ip := udp.get_packet_ip()
-		if parts[0] != Room.HELLO or ip in found:
+		if parts.size() < 3 or parts[0] != Room.HELLO or not parts[1] in Games.LIST or ip in found:
 			continue
-		var host_name := parts[1].strip_edges().left(UI.NAME_MAX) if parts.size() > 1 else ""
-		var card := UI.tile(UI.COLORS[1], UI.icon("wifi", Color.WHITE, 140),
-			"%s's room" % (host_name if host_name != "" else "Friend"), "Tap to join  " + ip, Vector2(900, 200), 54)
+		var info: Dictionary = Games.LIST[parts[1]]
+		var host_name := parts[2].strip_edges().left(UI.NAME_MAX)
+		var card := UI.tile(UI.COLORS[info.color], UI.icon("wifi", Color.WHITE, 140),
+			"%s's room" % (host_name if host_name != "" else "Friend"), "%s - tap to join  %s" % [info.name, ip], Vector2(900, 200), 54)
 		card.pressed.connect(_join.bind(ip))
 		rooms.add_child(card)
 		found[ip] = card
