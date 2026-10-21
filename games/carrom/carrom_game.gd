@@ -1,5 +1,6 @@
 ## Carrom table: the board fills the width, opponents' portraits sit above it, your striker
-## slider and portrait below. The board turns so the local shooter is always at the bottom.
+## slider and portrait below. The board never turns during a game: it is drawn with this phone's
+## player at the bottom, and pass-and-play friends shoot from their own sides of it.
 ## Same turn loop as cards_game.gd: a shot goes through _intent -> _host_do, which runs the rules
 ## (and the physics) and queues the event; events animate one at a time from the frames the
 ## physics recorded, then the screen catches up with the state.
@@ -76,7 +77,6 @@ var _kinds := []
 var _clock := 0.0
 var _done_events := 0
 var _last_clack := -1.0
-var _rot_tw: Tween
 var _synced := []  # host: peers whose table is ready for events
 
 
@@ -107,7 +107,7 @@ func _ready() -> void:
 	view = start.duplicate(true)  # a guest's stand-in until the host's state arrives
 	_base = me if me != -1 else colors[0]
 	_build(colors)
-	_turn_board(_base, false)
+	_turn_board(_base)
 	set_process(false)
 	if multiplayer.is_server():
 		state = start
@@ -177,27 +177,13 @@ func on_back() -> void:
 		_to_menu()
 
 
-## Puts seat `base` at the bottom (turning the board) and the others round the table.
-func _turn_board(base: int, animate := true) -> void:
+## Puts seat `base` at the bottom of the screen (fixed for the game) and the others round it.
+func _turn_board(base: int) -> void:
 	_base = base
-	var target := base * PI / 2
-	var from := board.rotation
-	target = from + wrapf(target - from, -PI, PI)  # the short way round
-	if _rot_tw:
-		_rot_tw.kill()
-		_rot_tw = null
-	if animate:
-		_rot_tw = create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-		_rot_tw.tween_property(board, "rotation", target, 0.55)
-	else:
-		board.rotation = target
+	board.rotation = base * PI / 2
 	for c in players:
 		var rel := posmod(c - base, 4)
-		var at: Vector2 = (MY_SPOT if rel == 0 else SPOTS[rel]) + Vector2(0, _oy)
-		if _rot_tw:
-			_rot_tw.tween_property(players[c], "position", at, 0.55)
-		else:
-			players[c].position = at
+		players[c].position = (MY_SPOT if rel == 0 else SPOTS[rel]) + Vector2(0, _oy)
 
 
 ## Redraws everything from `view` (no animation).
@@ -279,8 +265,6 @@ func _next() -> void:
 			_show_results()
 		return
 	var who: String = seats[c]
-	if who == "human" and seats.count("human") > 1 and c != _base:
-		_turn_board(c)  # pass and play: the board turns to whoever shoots
 	if who == "human":
 		var x: float = _spot.get(c, 500.0)
 		if not Rules.can_place(view, c, x):
@@ -467,9 +451,18 @@ func _unhandled_input(e: InputEvent) -> void:
 
 func _slide_to(screen_x: float) -> void:
 	var t := clampf((screen_x - SLIDER_X[0]) / (SLIDER_X[1] - SLIDER_X[0]), 0.0, 1.0)
-	_place_striker(view.turn, lerpf(Rules.BASE_MIN, Rules.BASE_MAX, t))
+	_place_striker(view.turn, lerpf(Rules.BASE_MIN, Rules.BASE_MAX, t if _slider_forward() else 1.0 - t))
 	slider.queue_redraw()
 	_controls()
+
+
+## Whether the slider runs the same way as the shooter's baseline looks on screen: left to right
+## for the bottom and top sides, top to bottom for the left and right ones. The board doesn't
+## turn for pass-and-play friends, so a friend across the table slides "backwards" in their frame.
+func _slider_forward() -> bool:
+	var a := board.to_screen(Rules.striker_at(view.turn, Rules.BASE_MIN))
+	var b := board.to_screen(Rules.striker_at(view.turn, Rules.BASE_MAX))
+	return b.x > a.x if absf(b.x - a.x) > absf(b.y - a.y) else b.y > a.y
 
 
 ## Shot for the current pull: {x, angle, power}, or {} when the pull is too short.
@@ -577,6 +570,8 @@ func _draw_slider() -> void:
 		var tx := 70 + k * (slider.size.x - 140) / 8.0
 		slider.draw_line(Vector2(tx, 36), Vector2(tx, 54), Color(1, 1, 1, 0.2), 3)
 	var t := inverse_lerp(Rules.BASE_MIN, Rules.BASE_MAX, _x)
+	if not _slider_forward():
+		t = 1.0 - t
 	var x := 70 + t * (slider.size.x - 140)
 	slider.draw_circle(Vector2(x, 45), 46, UI.INK)
 	Board.draw_piece(slider, Vector2(x, 45), Physics.STRIKER, 0.0, 1.45, 1.0, not _aim_ok)
