@@ -12,10 +12,11 @@ const WOOD := Color("6b3a1f")
 const WOOD_DARK := Color("4a2512")
 const PLY := Color("f2dcaa")
 const LINE := Color("3b2414")
-const RED := Color("c8283a")
+const RED := Color("a0523d")  # board markings: a muted brick, so the queen stands out
 const IVORY := Color("f4ecd6")
 const EBONY := Color("2a201c")
-const QUEEN_RED := Color("d7263d")
+const QUEEN_RED := Color("ff1f4b")
+const QUEEN_RIM := Color("f5b82e")  # gold
 const STRIKER := Color("e9f0fb")
 const STRIKER_RING := Color("2f6bd8")
 const KIND_COLORS := [IVORY, EBONY, QUEEN_RED, STRIKER]
@@ -156,7 +157,7 @@ func _draw_markings() -> void:
 	var star := PackedVector2Array()
 	for k in 16:
 		star.append(Vector2.from_angle(k * PI / 8) * (98.0 if k % 2 == 0 else 38.0))
-	draw_colored_polygon(star, Color(RED, 0.85))
+	draw_colored_polygon(star, Color(RED, 0.55))
 	star.append(star[0])
 	draw_polyline(star, LINE, 2.0, true)
 	draw_circle(Vector2.ZERO, 30, PLY)
@@ -186,9 +187,12 @@ static func draw_piece(ci: CanvasItem, at: Vector2, kind: int, rot := 0.0, scale
 	var body: Color = Color("ff5a5a") if bad else KIND_COLORS[kind]
 	var dark := body.darkened(0.35) if kind != Physics.BLACK else Color("120c0a")
 	var mark := body.darkened(0.2) if kind in [Physics.WHITE, Physics.STRIKER] else body.lightened(0.25)
+	if kind == Physics.QUEEN:  # gold rim and white rings: never mistaken for a board marking
+		dark = QUEEN_RIM
+		mark = Color(1, 1, 1, 0.9)
 	ci.draw_circle(at + Vector2(3, 5) * scale, r + 1, Color(0, 0, 0, 0.28 * alpha))
 	ci.draw_circle(at, r, Color(dark, alpha))
-	ci.draw_circle(at, r - 2.5 * scale, Color(body, alpha))
+	ci.draw_circle(at, r - (4.0 if kind == Physics.QUEEN else 2.5) * scale, Color(body, alpha))
 	ci.draw_circle(at + Vector2(-r * 0.22, -r * 0.25), r * 0.55, Color(1, 1, 1, 0.12 * alpha))  # shine
 	if kind == Physics.STRIKER:
 		var ring: Color = Color("b3122a") if bad else STRIKER_RING
