@@ -194,7 +194,12 @@ func _refresh() -> void:
 		var o: int = owners[c]
 		card.name.text = names[c] if o > 0 else Games.BOT_NAMES[c] if o == 0 else "Empty seat"
 		card.badge.text = "YOU" if o == me else "HOST" if o == 1 else "PLAYER" if o > 0 else "BOT" if o == 0 else "OFF"
+		var faces: bool = Games.LIST[game].faces  # a joiner only learns the game here
+		card.pawn.kind = "face" if faces else "pawn"
+		card.pawn.count = c
+		card.pawn.disc = Color(1, 1, 1, 0.0 if faces else 0.35)
 		card.pawn.bob = o == me
+		card.pawn.queue_redraw()
 		card.button.modulate.a = 0.45 if o == -1 else 1.0
 		if not _shown_owners.is_empty() and o > 0 and _shown_owners[c] <= 0:  # someone just sat down
 			card.button.scale = Vector2(1.15, 1.15)

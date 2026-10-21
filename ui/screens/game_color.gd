@@ -69,13 +69,20 @@ func _tap(c: int) -> void:
 	_refresh()
 
 
+## vs Computer seats: you at `you`, bots filling the opposite corner first, like real Ludo.
+static func bot_seats(you: int, count: int) -> Array:
+	var seats := ["off", "off", "off", "off"]
+	seats[you] = "human"
+	for k in [2, 1, 3].slice(0, count - 1):
+		seats[(you + k) % 4] = "bot"
+	return seats
+
+
 func _seats() -> Array:
 	var seats := ["off", "off", "off", "off"]
 	if mode == "bots":
 		if not picks.is_empty():
-			seats[picks[0]] = "human"
-			for k in [2, 1, 3].slice(0, count - 1):  # opposite corner first, like real Ludo
-				seats[(picks[0] + k) % 4] = "bot"
+			seats = bot_seats(picks[0], count)
 	else:
 		for c in picks:
 			seats[c] = "human"

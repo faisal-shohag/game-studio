@@ -3,10 +3,12 @@ extends Control
 
 const PawnArt = preload("res://games/shared/pawn_art.gd")
 const CardArt = preload("res://games/cards/card_art.gd")
+const FaceArt = preload("res://games/shared/face_art.gd")
 
 var kind := ""
 var color := Color.WHITE
-var count := 1  # "pawns": how many
+var count := 1  # "pawns"/"faces": how many; "face": which look
+var sad := false  # "face": frowning
 var disc := Color(0, 0, 0, 0)  # optional backdrop circle for contrast
 var bob := false:  # gentle float up and down
 	set(v):
@@ -41,6 +43,12 @@ func _draw() -> void:
 			for i in count:
 				var x := size.x * (i + 0.5) / count
 				PawnArt.draw(self, Vector2(x, c.y + 46 * s), s, UI.COLORS[i])
+		"face":
+			FaceArt.draw(self, c, 92 * u, color, count, not sad)
+		"faces":
+			var s := minf(size.x / count, size.y) * 0.86
+			for i in count:
+				FaceArt.draw(self, Vector2(size.x * (i + 0.5) / count, c.y), s, UI.COLORS[i], i)
 		"dice":
 			draw_rect(Rect2(c - Vector2(34, 34) * u, Vector2(68, 68) * u), ink)
 			draw_rect(Rect2(c - Vector2(30, 30) * u, Vector2(60, 60) * u), Color.WHITE)
