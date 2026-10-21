@@ -2,6 +2,7 @@
 extends Node
 
 const Icon = preload("res://ui/icon.gd")
+const Avatar = preload("res://core/avatar.gd")
 const COLORS := [Color("ff4757"), Color("2ed573"), Color("ffc312"), Color("1e90ff")]
 const NAMES := ["Red", "Green", "Yellow", "Blue"]
 const INK := Color("23194d")  # outlines and dark text
@@ -9,6 +10,7 @@ const ACCENT := Color("ff9f1a")
 const LOCKED := Color("8c87b8")
 const FONT := preload("res://assets/fonts/LilitaOne-Regular.ttf")
 const SETTINGS_PATH := "user://settings.cfg"
+const PHOTO_PATH := "user://avatar.jpg"
 const NAME_MAX := 16
 const ADJECTIVES := ["Lucky", "Happy", "Brave", "Swift", "Super", "Mighty", "Crazy", "Royal", "Sunny", "Ninja", "Turbo", "Jolly"]
 const ANIMALS := ["Tiger", "Panda", "Fox", "Lion", "Owl", "Shark", "Koala", "Eagle", "Bear", "Wolf", "Cobra", "Yak"]
@@ -27,6 +29,30 @@ var player_name: String:
 	set(v):
 		settings.set_value("player", "name", v)
 		settings.save(SETTINGS_PATH)
+
+## The player's avatar ({"face": n} or {"photo": jpeg bytes}). Before one is chosen, a random face.
+var avatar: Dictionary:
+	get:
+		if _avatar.is_empty():
+			var face: int = settings.get_value("player", "face", -2)
+			if face == -1 and FileAccess.file_exists(PHOTO_PATH):
+				_avatar = Avatar.clean({"photo": FileAccess.get_file_as_bytes(PHOTO_PATH)})
+			elif face >= 0:
+				_avatar = Avatar.clean({"face": face})
+			if _avatar.is_empty():
+				_avatar = {"face": randi() % Avatar.FACES}
+		return _avatar
+	set(v):
+		if v.has("photo"):
+			var f := FileAccess.open(PHOTO_PATH, FileAccess.WRITE)
+			f.store_buffer(v.photo)
+			f.close()
+			settings.set_value("player", "face", -1)
+		else:
+			settings.set_value("player", "face", v.get("face", 0))
+		settings.save(SETTINGS_PATH)
+		_avatar = v
+var _avatar := {}
 
 
 func _ready() -> void:
@@ -77,6 +103,14 @@ func restart(overrides := {}) -> void:
 	var props: Dictionary = current_entry[1].duplicate()
 	props.merge(overrides, true)
 	_show(current_entry[0], props, 1)
+
+
+## Back to the previous screen, reopening it with some props changed (a picker handing back
+## its result: the screen it returns to was freed and is rebuilt from these props).
+func back_with(props: Dictionary) -> void:
+	if not history.is_empty():
+		history.back()[1] = history.back()[1].merged(props, true)
+	back()
 
 
 ## Android back / back arrow. A screen can take over with `on_back()`.

@@ -4,11 +4,14 @@ extends Control
 const PawnArt = preload("res://games/shared/pawn_art.gd")
 const CardArt = preload("res://games/cards/card_art.gd")
 const FaceArt = preload("res://games/shared/face_art.gd")
+const Avatar = preload("res://core/avatar.gd")
 
 var kind := ""
 var color := Color.WHITE
 var count := 1  # "pawns"/"faces": how many; "face": which look
 var sad := false  # "face": frowning
+var avatar := {}  # "avatar": what to show (a pawn if empty)
+var round := false  # "avatar": circle instead of a rounded tile
 var disc := Color(0, 0, 0, 0)  # optional backdrop circle for contrast
 var bob := false:  # gentle float up and down
 	set(v):
@@ -45,6 +48,20 @@ func _draw() -> void:
 				PawnArt.draw(self, Vector2(x, c.y + 46 * s), s, UI.COLORS[i])
 		"face":
 			FaceArt.draw(self, c, 92 * u, color, count, not sad)
+		"avatar":
+			var col: Color = UI.COLORS[avatar.face % 4] if avatar.has("face") else color
+			if not Avatar.draw(self, c, 92 * u, avatar, col, round, not sad):
+				PawnArt.draw(self, c + Vector2(0, 46) * u, u * 0.95, color)
+		"camera":
+			var body := Rect2(c + Vector2(-38, -22) * u, Vector2(76, 52) * u)
+			draw_rect(Rect2(c + Vector2(-14, -32) * u, Vector2(28, 14) * u), color)
+			var box := StyleBoxFlat.new()
+			box.bg_color = color
+			box.set_corner_radius_all(int(10 * u))
+			draw_style_box(box, body)
+			draw_circle(body.get_center(), 18 * u, ink)
+			draw_circle(body.get_center(), 12 * u, color)
+			draw_circle(body.get_center(), 6 * u, ink)
 		"faces":
 			var s := minf(size.x / count, size.y) * 0.86
 			for i in count:

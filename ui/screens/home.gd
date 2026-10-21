@@ -21,7 +21,24 @@ func build() -> void:
 		speaker.queue_redraw())
 	top.add_child(sound)
 	top.move_child(sound, 0)
-	var chip := UI.button(UI.player_name, UI.INK.lightened(0.3), Vector2(0, 110), 40)
+	# profile chip: your avatar and name; tap to edit
+	var chip := UI.button("", UI.INK.lightened(0.3), Vector2(0, 110), 40)
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	row.offset_left = 14
+	row.offset_right = -24
+	row.offset_bottom = -10
+	row.add_theme_constant_override("separation", 14)
+	row.mouse_filter = MOUSE_FILTER_IGNORE
+	var face := UI.icon("avatar", UI.COLORS[0], 84)
+	face.avatar = UI.avatar
+	face.size_flags_vertical = SIZE_SHRINK_CENTER
+	row.add_child(face)
+	var label := UI.label(UI.player_name, 40)
+	label.size_flags_vertical = SIZE_SHRINK_CENTER
+	row.add_child(label)
+	chip.add_child(row)
+	chip.custom_minimum_size.x = 14 + 84 + 14 + UI.FONT.get_string_size(UI.player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 40).x + 40
 	chip.pressed.connect(func(): UI.go("res://ui/screens/welcome.gd", {"show_back": true}))
 	top.add_child(chip)
 
