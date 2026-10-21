@@ -11,12 +11,16 @@ const PLACE_TEXT := ["1st", "2nd", "3rd", "4th"]
 const REWARD := [100, 50, 25, 10]  # cosmetic stars for now; no currency yet
 # podium slot per place: [center x, block height]
 const SLOTS := [[540.0, 320.0], [275.0, 230.0], [805.0, 165.0]]
+# two teams of two: winners side by side in the middle, the others either side
+const TEAM_SLOTS := [[410.0, 320.0], [670.0, 320.0], [150.0, 190.0], [930.0, 190.0]]
 
 var ranking := []  # colors, winner first
 var names := []
 var me := -1  # local player's color, -1 = none (all bots)
 var avatars := []  # per color; a set one replaces the pawn on the podium
 var stats := []  # per color: one line of game-specific numbers ("Captures 2    Sixes 5")
+var faces := false  # players without an avatar show their seat's face instead of a pawn
+var places := []  # place (0 = 1st) of each ranking entry when partners share one; empty = 1st, 2nd, ...
 var can_restart := true  # LAN clients wait for the host instead
 var _ray_angle := 0.0
 var _rays_at := Vector2.ZERO
@@ -29,8 +33,11 @@ func _ready() -> void:
 	_rays_at = Vector2(540, oy + 700)
 	modulate.a = 0.0
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.3)
+	if places.is_empty():
+		places = range(ranking.size())
+	var teams: bool = places.size() == 4 and places.count(0) == 2
 	var winner: int = ranking[0]
-	var won := winner == me
+	var won: bool = me != -1 and places[ranking.find(me)] == 0
 	Sfx.play("win" if won or me == -1 else "lose", 0.0)
 
 	# ribbon title drops in
@@ -42,7 +49,8 @@ func _ready() -> void:
 	ribbon.add_theme_stylebox_override("panel", style)
 	ribbon.size = Vector2(980, 180)
 	ribbon.position = Vector2(50, -260)
-	var title := UI.label("YOU WIN!" if won else "%s WINS!" % names[winner].to_upper(), 84)
+	var winner_text: String = "%s & %s WIN!" % [names[ranking[0]], names[ranking[1]]] if teams else "%s WINS!" % names[winner]
+	var title := UI.label("YOU WIN!" if won else winner_text.to_upper(), 84 if not teams else 64)
 	title.size = Vector2(980, 160)
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -50,19 +58,21 @@ func _ready() -> void:
 	add_child(ribbon)
 	create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).tween_property(ribbon, "position:y", oy + 150, 0.6)
 	if me != -1 and not won:
-		var sub := UI.label("You finished %s" % PLACE_TEXT[ranking.find(me)], 52, Color(1, 1, 1, 0.9))
+		var sub := UI.label("You finished %s" % PLACE_TEXT[places[ranking.find(me)]], 52, Color(1, 1, 1, 0.9))
 		sub.size = Vector2(1080, 70)
 		sub.position = Vector2(0, oy + 350)
 		add_child(sub)
 
 	# podium: blocks rise from the floor, pawn + name pop on top, crown on 1st
 	var floor_y := oy + 1150
-	var shown := mini(3, ranking.size())
-	for place in range(shown - 1, -1, -1):
-		var c: int = ranking[place]
-		var x: float = SLOTS[place][0]
-		var h: float = SLOTS[place][1]
-		var delay := (shown - 1 - place) * 0.35 + 0.4
+	var shown := 4 if teams else mini(3, ranking.size())
+	for i in range(shown - 1, -1, -1):
+		var c: int = ranking[i]
+		var place: int = places[i]
+		var slot: Array = TEAM_SLOTS[i] if teams else SLOTS[place]
+		var x: float = slot[0]
+		var h: float = slot[1]
+		var delay := (shown - 1 - i) * 0.35 + 0.4
 		var block := Panel.new()
 		var bs := UI.box(UI.COLORS[c], 14, 24)
 		bs.border_color = UI.INK
@@ -81,6 +91,10 @@ func _ready() -> void:
 		if c < avatars.size() and not avatars[c].is_empty():
 			pawn.kind = "avatar"
 			pawn.avatar = avatars[c]
+		elif faces:
+			pawn.kind = "face"
+			pawn.count = c
+			pawn.sad = places[i] != 0
 		pawn.position = Vector2(x - 100, floor_y - h - 196)
 		var name_label := UI.label(names[c], 38)
 		name_label.size = Vector2(320, 50)
@@ -105,7 +119,7 @@ func _ready() -> void:
 
 	# last place under the podium (4-player games)
 	var y := floor_y + 30
-	if ranking.size() == 4:
+	if ranking.size() == 4 and not teams:
 		var last := UI.label("4th   %s" % names[ranking[3]], 40, UI.COLORS[ranking[3]].lightened(0.35))
 		last.size = Vector2(1080, 56)
 		last.position = Vector2(0, y)
@@ -128,7 +142,7 @@ func _ready() -> void:
 		stars.size = Vector2(300, 100)
 		stars.position = Vector2(485, y + 6)
 		add_child(stars)
-		var reward: int = REWARD[ranking.find(me)]
+		var reward: int = REWARD[places[ranking.find(me)]]
 		var tw := create_tween()
 		tw.tween_interval(1.6)
 		tw.tween_method(func(v: int): stars.text = "+%d" % v, 0, reward, 1.0)

@@ -8,8 +8,8 @@ const Physics = preload("res://games/carrom/carrom_physics.gd")
 const SPOTS := 9  # baseline spots tried
 const RANDOM_SHOTS := 6
 const MAX_CUT := 1.2  # radians: thinner cuts are too risky
-const ANGLE_NOISE := 0.006
-const POWER_NOISE := 0.04
+const ANGLE_NOISE := 0.016
+const POWER_NOISE := 0.06
 
 
 ## Best shot for seat c, from up to `budget` simulations.
