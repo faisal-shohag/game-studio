@@ -1,4 +1,5 @@
-## Two-process LAN test through the real room screens + game. Run both (game: ludo | snakes | cards):
+## Two-process LAN test through the real room screens + game. Run both (game: ludo | snakes | cards |
+## carrom, which plays Classic, or Freestyle with `freestyle` added to the host command):
 ##   godot --headless --path . tests/run.tscn -- tests/net_game.gd host ludo
 ##   godot --headless --path . tests/run.tscn -- tests/net_game.gd join ludo
 ## Each auto-taps its own seat; both print FINAL board, which must match.
@@ -8,13 +9,15 @@
 ## Avatars: the host plays with a photo, the guest with face 5; both print `avatars:`, which must match.
 ## Cards: FINAL compares public info only, and the client prints SECRET ok if every event and view
 ## it received carried only its own cards (until game over, when every hand is revealed).
+## Carrom: each phone shoots random legal shots for its seat; FINAL compares coin positions
+## (rounded), scores and winners, so the guest's replays must have snapped to the host's state.
 extends Node
 
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	var hosting := "host" in args
-	var game_id := "snakes" if "snakes" in args else "cards" if "cards" in args else "ludo"
+	var game_id := "snakes" if "snakes" in args else "cards" if "cards" in args else "carrom" if "carrom" in args else "ludo"
 	Engine.time_scale = 20
 	UI.settings.set_value("player", "name", "Host Hana" if hosting else "Guest Gil")  # not saved to disk
 	var pic := Image.create(300, 300, false, Image.FORMAT_RGB8)
@@ -22,7 +25,8 @@ func _ready() -> void:
 	UI._avatar = {"photo": UI.Avatar.photo_from(pic, Rect2(0, 0, 300, 300))} if hosting else {"face": 5}  # not saved either
 	await get_tree().process_frame
 	if hosting:
-		UI.go("res://ui/screens/lan_room.gd", {"hosting": true, "game": game_id})
+		var variant := "" if game_id != "carrom" else "freestyle" if "freestyle" in args else "classic"
+		UI.go("res://ui/screens/lan_room.gd", {"hosting": true, "game": game_id, "variant": variant})
 		var room: Node = UI.current
 		while multiplayer.get_peers().is_empty():
 			await get_tree().process_frame
@@ -54,6 +58,14 @@ func _ready() -> void:
 			print("client leaving mid-game")
 			get_tree().quit()
 			return
+		if game_id == "carrom":
+			if game.view.get("phase") == "over":
+				break
+			if game._my_turn():
+				var x := randf_range(game.Rules.BASE_MIN, game.Rules.BASE_MAX)
+				if game.Rules.can_place(game.view, game.me, x):
+					game._intent({"x": x, "angle": randf_range(-1.2, 1.2), "power": randf_range(0.3, 1.0)}, game.me)
+			continue
 		if game_id == "cards":
 			if game.view.get("phase") == "over":
 				break
@@ -85,6 +97,11 @@ func _ready() -> void:
 
 ## What both phones must agree on. Cards: public info only (a client has no state).
 func _board(game: Node) -> Array:
+	if game.get("view") != null and game.view.has("pieces"):  # Carrom
+		var v: Dictionary = game.view
+		var coins: Array = v.pieces.map(func(p): return [p.id, roundi(p.x), roundi(p.y)])
+		coins.sort()
+		return [v.phase, v.variant, coins, v.scores, v.winners]
 	if game.get("view") != null:
 		var v: Dictionary = game.view
 		return [v.get("phase"), v.get("discard", [-1]).back(), v.get("counts"), v.get("winners")]

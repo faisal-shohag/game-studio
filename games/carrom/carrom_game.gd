@@ -4,6 +4,11 @@
 ## (and the physics) and queues the event; events animate one at a time from the frames the
 ## physics recorded, then the screen catches up with the state.
 ##
+## Over LAN the host decides every shot. A guest sends only {x, angle, power}; the host checks it,
+## shoots and sends everyone the shot and the state after it (no frames). Each phone replays the
+## shot with its own physics for the animation, then snaps to the host's state: floats may differ
+## slightly between phones, the host's result is the truth.
+##
 ## Aiming: drag the slider to place the striker on your baseline, then touch the striker and pull
 ## back. The guide points the other way, up to the first coin (with a ghost striker where it would
 ## touch) or one cushion bounce; the ring round the striker shows the power. Let go to shoot, or
@@ -32,9 +37,10 @@ const SINK_FRAMES := 14.0
 const GUIDE := 520.0  # guide length past the first cushion
 
 var variant := "classic"
-## Seat type per seat: "human", "bot", "off" (or "remote" on another phone, later).
+## Seat type per seat: "human", "bot", "off", or "remote" (played on another phone).
+## Set before adding to tree. For LAN games set `owners` instead.
 var seats := ["human", "off", "bot", "off"]
-## LAN only (Phase 4): peer id per seat. Empty = offline.
+## LAN only: peer id per seat, 0 = bot (run by host), -1 = off. Empty = offline.
 var owners := []
 var names := []
 var avatars := []
@@ -71,9 +77,18 @@ var _clock := 0.0
 var _done_events := 0
 var _last_clack := -1.0
 var _rot_tw: Tween
+var _synced := []  # host: peers whose table is ready for events
 
 
 func _ready() -> void:
+	if not owners.is_empty():
+		var my_id := multiplayer.get_unique_id()
+		me = owners.find(my_id)
+		for c in 4:
+			var o: int = owners[c]
+			seats[c] = "off" if o == -1 else "human" if o == my_id else "bot" if o == 0 and multiplayer.is_server() else "remote"
+		multiplayer.peer_disconnected.connect(_on_peer_left)
+		multiplayer.server_disconnected.connect(_on_host_left)
 	var colors := []
 	for c in 4:
 		if seats[c] != "off":
@@ -82,19 +97,27 @@ func _ready() -> void:
 		me = seats.find("human")
 	if names.is_empty():
 		for c in 4:
-			names.append(UI.player_name if c == me else Games.BOT_NAMES[c] if seats[c] == "bot" else "Player %d" % (c + 1))
+			var bot: bool = seats[c] == "bot" or (not owners.is_empty() and owners[c] == 0)
+			names.append(UI.player_name if c == me else Games.BOT_NAMES[c] if bot else "Player %d" % (c + 1))
 	if avatars.is_empty():  # offline: only you have one; bots and pass-and-play friends get the default
 		avatars = [{}, {}, {}, {}]
 		if me != -1:
 			avatars[me] = UI.avatar
-	state = Rules.new_state(variant, colors)
-	view = state.duplicate(true)
+	var start := Rules.new_state(variant, colors)
+	view = start.duplicate(true)  # a guest's stand-in until the host's state arrives
 	_base = me if me != -1 else colors[0]
 	_build(colors)
 	_turn_board(_base, false)
 	set_process(false)
-	_refresh()
-	_next()
+	if multiplayer.is_server():
+		state = start
+		_refresh()
+		_next()
+	else:
+		waiting_host = true
+		_refresh()
+		hint.text = "Joining the table..."
+		_hello.rpc_id(1)  # the host may have started already; it answers with the current state
 
 
 func _build(colors: Array) -> void:
@@ -113,7 +136,7 @@ func _build(colors: Array) -> void:
 		seat.player_name = names[c]
 		seat.avatar = avatars[c]
 		seat.fan_visible = false
-		var man := Rules.man_of(state, c)
+		var man := Rules.man_of(view, c)
 		seat.coin = null if man == -1 else Board.KIND_COLORS[man]
 		hud.add_child(seat)
 		players[c] = seat
@@ -150,7 +173,7 @@ func _to_menu() -> void:
 func on_back() -> void:
 	if view.phase == "over":
 		_to_menu()
-	elif await UI.confirm("Leave game?", "Your progress will be lost."):
+	elif await UI.confirm("Leave game?", "Your progress will be lost." if owners.is_empty() else "You will leave the room."):
 		_to_menu()
 
 
@@ -226,7 +249,7 @@ func _controls() -> void:
 		hint.text = who if _aim_ok else "Move the striker off the coin"
 	elif seats[c] == "human":
 		hint.text = ""
-	elif seats[c] == "remote":
+	elif seats[c] == "remote" and owners[c] != 0:
 		hint.text = "Waiting for %s..." % names[c]
 	else:
 		hint.text = "%s is thinking..." % names[c]
@@ -323,25 +346,90 @@ func _bot_turn(c: int) -> void:
 		_intent(shot, c)
 
 
-## The local player or a bot shoots. The host (or an offline phone) decides.
+## The local player or a bot shoots. The host (or an offline phone) decides; guests ask the host.
 func _intent(shot: Dictionary, c: int) -> void:
-	_host_do(shot, c, 0)
+	if multiplayer.is_server():
+		_host_do(shot, c, 0)
+	else:
+		waiting_host = true
+		_controls()
+		_request.rpc_id(1, shot)
 
 
+@rpc("any_peer", "reliable")
+func _request(shot: Dictionary) -> void:
+	if multiplayer.is_server():
+		var sender := multiplayer.get_remote_sender_id()
+		_host_do(shot, owners.find(sender), sender)
+
+
+## Host runs the shot. sender 0 = this phone; else that peer must own seat c.
 func _host_do(shot: Dictionary, c: int, sender: int) -> void:
 	if c == -1 or (sender != 0 and owners[c] != sender):
 		return
 	var ev := Rules.shoot(state, c, shot)
 	if ev.is_empty():
+		if sender != 0:
+			_rejected.rpc_id(sender)
 		return
-	_show(ev, state.duplicate(true))
+	var after := state.duplicate(true)
+	var light := ev.duplicate()
+	light.erase("sim")  # guests replay the shot themselves
+	for peer in _synced:
+		_show.rpc_id(peer, light, after)
+	_show(ev, after)
 
 
+## A guest's table is ready: send it the game as it stands.
+@rpc("any_peer", "reliable")
+func _hello() -> void:
+	var peer := multiplayer.get_remote_sender_id()
+	if multiplayer.is_server() and owners.has(peer) and not peer in _synced:
+		_synced.append(peer)
+		_sync_state.rpc_id(peer, state)
+
+
+@rpc("authority", "reliable")
+func _sync_state(s: Dictionary) -> void:
+	view = s
+	waiting_host = false
+	if not busy:
+		_next()
+
+
+## The host turned our shot down (the turn moved on, ...): let the player try again.
+@rpc("authority", "reliable")
+func _rejected() -> void:
+	waiting_host = false
+	if not busy:
+		_controls()
+
+
+@rpc("authority", "reliable")
 func _show(ev: Dictionary, after: Dictionary) -> void:
 	waiting_host = false
 	pending.append([ev, after])
 	if not busy:
 		_next()
+
+
+func _on_peer_left(id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_synced.erase(id)
+	for c in 4:
+		if owners[c] == id:
+			owners[c] = 0
+			seats[c] = "bot"
+	if not busy and pending.is_empty() and view.phase != "over":
+		_next()
+
+
+func _on_host_left() -> void:
+	busy = true
+	set_process(false)
+	hint.text = "Host left the game"
+	slider.hide()
 
 
 # --- input --------------------------------------------------------------------
@@ -499,6 +587,14 @@ func _draw_slider() -> void:
 func _animate(ev: Dictionary, after: Dictionary) -> void:
 	busy = true
 	_controls()
+	if not ev.has("sim"):  # from the host: replay it here, slide the striker over first
+		var tw := create_tween()
+		tw.tween_method(func(x: float): _place_striker(ev.seat, x), _spot.get(ev.seat, 500.0), ev.shot.x, 0.3).set_trans(Tween.TRANS_SINE)
+		await tw.finished
+		if not is_inside_tree():
+			return
+		ev.sim = Physics.simulate(view.pieces, Rules.launch(ev.seat, ev.shot))
+	_spot[ev.seat] = ev.shot.x
 	_ev = ev
 	_frames = ev.sim.frames
 	_ids = view.pieces.map(func(p): return p.id) + [-1]
@@ -624,6 +720,25 @@ func _show_results() -> void:
 	for c in view.colors:
 		lines[c] = Rules.stats(view, c)
 	_results.stats = lines
-	_results.play_again.connect(UI.restart)
+	_results.can_restart = owners.is_empty() or multiplayer.is_server()
+	_results.play_again.connect(_play_again)
 	_results.home.connect(_to_menu)
 	hud.add_child(_results)
+
+
+func _play_again() -> void:
+	if owners.is_empty():
+		UI.restart()
+		return
+	var n := names.duplicate()
+	var a := avatars.duplicate()
+	for c in 4:
+		if owners[c] == 0:  # players who left are bots now
+			n[c] = Games.BOT_NAMES[c]
+			a[c] = {}
+	_restart.rpc(owners, n, a)
+
+
+@rpc("authority", "call_local", "reliable")
+func _restart(o: Array, n: Array, a: Array) -> void:
+	UI.restart({"owners": o, "names": n, "avatars": a})  # the variant carries over

@@ -1,4 +1,5 @@
-## Games with rule sets (Carrom): pick one before the player count.
+## Games with rule sets (Carrom): pick one before the player count (or, with friends, before
+## creating a room: a room keeps the rules it was made with).
 extends "res://ui/screen.gd"
 
 const Games = preload("res://core/games.gd")
@@ -9,7 +10,7 @@ const INFO := {
 }
 
 var game := "carrom"
-var mode := "bots"
+var mode := "bots"  # bots | local | lan
 
 
 func _init() -> void:
@@ -21,5 +22,8 @@ func build() -> void:
 	for v in Games.LIST[game].variants:
 		var info: Array = INFO[v]
 		var t := UI.tile(UI.COLORS[info[0]], UI.icon(game, Color.WHITE, 200), info[1], info[2], Vector2(940, 300), 80)
-		t.pressed.connect(UI.go.bind("res://ui/screens/game_players.gd", {"game": game, "mode": mode, "variant": v}))
+		if mode == "lan":
+			t.pressed.connect(UI.go.bind("res://ui/screens/lan_menu.gd", {"game": game, "variant": v}))
+		else:
+			t.pressed.connect(UI.go.bind("res://ui/screens/game_players.gd", {"game": game, "mode": mode, "variant": v}))
 		content.add_child(t)

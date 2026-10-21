@@ -23,5 +23,5 @@ func build() -> void:
 		content.add_child(local)
 	if Games.LIST[game].lan:
 		var lan := UI.tile(UI.COLORS[0], UI.icon("wifi", Color.WHITE, 170), "WITH FRIENDS", "Same Wi-Fi or hotspot")
-		lan.pressed.connect(UI.go.bind("res://ui/screens/lan_menu.gd", {"game": game}))
+		lan.pressed.connect(UI.go.bind(next if next.ends_with("variant.gd") else "res://ui/screens/lan_menu.gd", {"game": game, "mode": "lan"}))
 		content.add_child(lan)
