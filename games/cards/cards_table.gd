@@ -87,7 +87,7 @@ func _draw() -> void:
 		var r := Rect2(PILE_AT - CardArt.SIZE / 2, CardArt.SIZE)
 		draw_rect(r, Color(1, 1, 1, 0.25), false, 4)
 	if pending > 0:
-		var at := Vector2(0, RADIUS - 6)
+		var at := Vector2(0, -RADIUS)
 		draw_circle(at, 52, UI.INK)
 		draw_circle(at, 45, UI.COLORS[0])
 		CardArt.text(self, "+%d" % pending, at, 50)

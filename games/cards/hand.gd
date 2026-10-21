@@ -5,7 +5,7 @@ extends Node2D
 signal picked(id: int)
 
 const Card = preload("res://games/cards/card.gd")
-const WIDTH := 880.0  # spread of card centers at most
+const WIDTH := 780.0  # spread of card centers at most
 const STEP := 140.0  # gap between card centers in a small hand
 
 var cards := {}  # id -> Card
