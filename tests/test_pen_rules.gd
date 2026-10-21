@@ -116,6 +116,8 @@ func _init() -> void:
 	check(start == game("turns", 1, [0, 1, 2, 3]).world, "simulate leaves its input alone")
 	check(r1.frames.size() > 10 and r1.frames[0].size() == 16, "frames hold every pen")
 	check(not overlapping(r1.final), "pens don't end up inside each other")
+	var r3 := Physics.simulate(r1.final, [{"id": 1, "grab": 0.0, "angle": 2.0, "power": 1.0}])
+	check(r3.events.all(func(e): return e.t < r3.frames.size()), "a second run's events fall within its own frames")
 
 	# --- setup ---
 	for n in [2, 3, 4]:

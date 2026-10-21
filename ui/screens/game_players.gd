@@ -8,6 +8,7 @@ const GameColor = preload("res://ui/screens/game_color.gd")
 var game := "ludo"
 var mode := "bots"  # bots | local
 var variant := ""  # rule set, for games that have them
+var rounds := 0  # match length, for games that have them
 
 
 func _init() -> void:
@@ -41,4 +42,6 @@ func _face_props(n: int) -> Dictionary:
 		props["names"] = names
 	if variant != "":
 		props["variant"] = variant
+	if rounds > 0:
+		props["rounds"] = rounds
 	return props

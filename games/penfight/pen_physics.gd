@@ -71,6 +71,7 @@ static func flick(pen: Dictionary, grab: float, angle: float, power: float) -> v
 ## went over, hit_by: id -> who knocked it last (fallen pens), frames, events, time}.
 static func simulate(world: Dictionary, flicks: Array, record := true, max_time := MAX_TIME) -> Dictionary:
 	var w := world.duplicate(true)
+	w.steps = 0  # frames and events count from this run's start
 	for f in flicks:
 		for pen in w.pens:
 			if pen.id == f.id and not pen.out:

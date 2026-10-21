@@ -1,7 +1,8 @@
 ## A player at the table: face portrait with the name under it, a count badge, a note bubble
 ## ("Thinking...", "1st place") and a glow on their turn. Card games show the hand as a fan of
 ## backs pointing at the table and a CATCH! bubble when they forgot to call their last card;
-## Carrom shows the score as the badge and a coin chip for the color they play.
+## Carrom shows the score as the badge and a coin chip for the color they play; Pen Fight shows
+## round wins as pips.
 extends Control
 
 signal catch_pressed
@@ -26,6 +27,11 @@ var count := 0:
 var badge := "":  # shown instead of the count when set ("230")
 	set(v):
 		badge = v
+		queue_redraw()
+## Round pips shown instead of the count: [won, needed] draws filled and hollow dots; [] = none.
+var pips := []:
+	set(v):
+		pips = v
 		queue_redraw()
 ## Carrom: the color this player pockets, drawn as a coin on the bottom-right corner (null = none).
 var coin = null:
@@ -157,6 +163,8 @@ func _draw() -> void:
 	var at := Vector2(PORTRAIT - 6, 8)
 	var text := badge if badge != "" else str(count)
 	var half := maxf(0.0, (UI.FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 36).x - 30) / 2)
+	if not pips.is_empty():
+		half = (pips[1] - 1) * 13.0
 	var fill: Color = UI.COLORS[0] if count == 1 and badge == "" else UI.ACCENT
 	for k in 2:
 		var r := 30.0 - k * 5
@@ -164,7 +172,13 @@ func _draw() -> void:
 		draw_circle(at - Vector2(half, 0), r, col)
 		draw_circle(at + Vector2(half, 0), r, col)
 		draw_rect(Rect2(at - Vector2(half, r), Vector2(half * 2, r * 2)), col)
-	CardArt.text(self, text, at, 36)
+	if pips.is_empty():
+		CardArt.text(self, text, at, 36)
+	else:
+		for k in pips[1]:
+			var dot := at + Vector2(k * 26.0 - half, 0)
+			draw_circle(dot, 10, UI.INK)
+			draw_circle(dot, 7, Color.WHITE if k < pips[0] else UI.ACCENT.darkened(0.25))
 	if coin is Color:
 		var cp := Vector2(PORTRAIT - 8, PORTRAIT - 14)
 		draw_circle(cp, 24, UI.INK)
