@@ -1,7 +1,5 @@
-## Home: logo, playable game cards, locked "coming soon" cards, name chip.
+## Home: logo, game cards, name chip.
 extends "res://ui/screen.gd"
-
-const SOON := ["Penfight"]
 
 
 func _init() -> void:
@@ -60,13 +58,6 @@ func build() -> void:
 	var carrom := UI.tile(UI.COLORS[2], UI.icon("carrom", Color.WHITE, 200), "CARROM", "2-4 players", Vector2(940, 220), 96)
 	carrom.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "carrom"}))
 	content.add_child(carrom)
-
-	var grid := GridContainer.new()
-	grid.columns = 1
-	grid.add_theme_constant_override("h_separation", 30)
-	grid.add_theme_constant_override("v_separation", 30)
-	for game in SOON:
-		var t := UI.tile(UI.LOCKED, UI.icon("lock", Color.WHITE, 80), game, "Coming soon", Vector2(940, 130), 44)
-		t.disabled = true
-		grid.add_child(t)
-	content.add_child(grid)
+	var pens := UI.tile(UI.COLORS[0].lerp(UI.COLORS[3], 0.5), UI.icon("pen", Color.WHITE, 200), "PEN FIGHT", "2-4 players", Vector2(940, 220), 96)
+	pens.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "penfight"}))
+	content.add_child(pens)

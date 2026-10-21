@@ -6,6 +6,7 @@ const CardArt = preload("res://games/cards/card_art.gd")
 const FaceArt = preload("res://games/shared/face_art.gd")
 const Avatar = preload("res://core/avatar.gd")
 const CarromBoard = preload("res://games/carrom/carrom_board.gd")
+const PenDesk = preload("res://games/penfight/penfight_desk.gd")
 
 var kind := ""
 var color := Color.WHITE
@@ -161,6 +162,19 @@ func _draw() -> void:
 			for coin in [[Vector2(40, 22), 0], [Vector2(27, 35), 1], [Vector2(50, 38), 2], [Vector2(58, 20), 1]]:
 				CarromBoard.draw_piece(self, ply.position + coin[0] * u, coin[1], 0.0, u * 0.38)
 			CarromBoard.draw_piece(self, ply.position + Vector2(42, 58) * u, 3, 0.4, u * 0.38)
+		"pen", "penfight":  # two pens crossed on a desk corner
+			var b := Rect2(c - Vector2(44, 44) * u, Vector2(88, 88) * u)
+			var desk := StyleBoxFlat.new()
+			desk.bg_color = PenDesk.WOOD
+			desk.set_corner_radius_all(int(14 * u))
+			desk.border_width_bottom = int(7 * u)
+			desk.border_color = PenDesk.WOOD_DARK
+			draw_style_box(desk, b)
+			for k in 3:
+				draw_line(b.position + Vector2(18 + k * 26, 6) * u, b.position + Vector2(14 + k * 26, 80) * u, Color(0.45, 0.24, 0.08, 0.18), 3 * u)
+			var s := u * 0.3
+			PenDesk.draw_pen(self, c + Vector2(-2, 6) * u, -0.75, "marker", UI.COLORS[3], 1.0, 0.0, s)
+			PenDesk.draw_pen(self, c + Vector2(2, -4) * u, 0.75 + PI, "gel", UI.COLORS[0], 1.0, 0.0, s)
 		"board":
 			var b := Rect2(c - Vector2(42, 42) * u, Vector2(84, 84) * u)
 			draw_rect(b.grow(4 * u), ink)

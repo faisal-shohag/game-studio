@@ -7,6 +7,8 @@ const Games = preload("res://core/games.gd")
 const INFO := {
 	"classic": [3, "CLASSIC", "White vs black. Cover the queen!"],
 	"freestyle": [0, "FREESTYLE", "Every coin scores. Queen 50!"],
+	"turns": [3, "TURNS", "Take turns. Knock them off!"],
+	"realtime": [0, "REAL-TIME", "No turns. Flick any time!"],
 }
 
 var game := "carrom"
