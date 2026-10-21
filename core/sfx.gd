@@ -30,7 +30,7 @@ func _ready() -> void:
 		_players.append(p)
 
 
-func play(key: String, pitch_jitter := 0.06, volume_db := 0.0) -> void:
+func play(key: String, pitch_jitter := 0.06, volume_db := 0.0, pitch := 1.0) -> void:
 	if muted:
 		return
 	var p: AudioStreamPlayer = _players[0]
@@ -39,7 +39,7 @@ func play(key: String, pitch_jitter := 0.06, volume_db := 0.0) -> void:
 			p = candidate
 			break
 	p.stream = _streams[key].pick_random()
-	p.pitch_scale = randf_range(1.0 - pitch_jitter, 1.0 + pitch_jitter)
+	p.pitch_scale = randf_range(1.0 - pitch_jitter, 1.0 + pitch_jitter) * pitch
 	p.volume_db = volume_db
 	p.play()
 

@@ -65,7 +65,7 @@ static func flick(pen: Dictionary, grab: float, angle: float, power: float) -> v
 
 ## Runs a world to rest (or for at most max_time) after the given flicks ({id, grab, angle, power} each).
 ## With `record`, also returns frames (one PackedFloat32Array of x, y, angle, fall per pen, in
-## world order, every 1/60 s) and events ({t: frame, type: "hit", a, b, speed} / {t, type: "edge",
+## world order, every 1/60 s) and events ({t: frame, type: "hit", a, b, speed, x, y} / {t, type: "edge",
 ## id} / {t, type: "out", id}).
 ## Returns {final: world at rest, fallen: ids in the order they went over, fall_step: id -> step it
 ## went over, hit_by: id -> who knocked it last (fallen pens), frames, events, time}.
@@ -381,4 +381,4 @@ class Sim:
 		vy[j] += imp.y * wj
 		w[j] += rj.cross(imp) * inv_i[j]
 		if record and -vn > HIT_SOUND:
-			events.append({"t": t, "type": "hit", "a": ids[i], "b": ids[j], "speed": -vn})
+			events.append({"t": t, "type": "hit", "a": ids[i], "b": ids[j], "speed": -vn, "x": at.x, "y": at.y})

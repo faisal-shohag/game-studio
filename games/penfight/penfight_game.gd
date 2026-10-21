@@ -52,6 +52,9 @@ const PICK_TIME := 15.0  # LAN: seconds to pick a pen before the host picks one
 const SNAP_EVERY := 1.0 / 15.0  # LAN Real-time: seconds between snapshots
 const BUFFER := 0.1  # LAN Real-time: guests draw this far behind the newest snapshot
 const SNAP_PEN := 5  # floats per pen in a snapshot: x, y, angle, fall, cooldown
+const SCUFF_HIT := 650.0  # a contact this fast scuffs the desk and throws sparks
+const SO_CLOSE := 30.0  # Turns: a pen ending this near the edge after a flick wobbles
+const STREAK := ["", "", "Double knock-off!", "Triple knock-off!"]
 
 var variant := "turns"
 var rounds := 1
@@ -88,6 +91,7 @@ var _pull := Vector2.ZERO
 var _synced := []  # host: peers whose table is ready for events
 # flick playback
 var _ev := {}
+var _ev_before := {}  # the state the flick started from
 var _after := {}
 var _frames := []
 var _ids := []  # pen id per frame slot
@@ -435,8 +439,9 @@ func _pick_time_up() -> void:
 	_broadcast({"type": "state"}, state.duplicate(true))
 
 
-## Pens drop onto the desk with a "Round N" stamp.
+## Pens drop onto the desk with a "Round N" stamp (and a clean desk).
 func _round_start() -> void:
+	desk.scuffs = []
 	_refresh()
 	Sfx.play("hop", 0.1)
 	Fx.popup(hud, "Round %d" % view.round if view.rounds > 1 else "Fight!", UI.COLORS[2], DESK_AT.y + _oy - 120, true)
@@ -704,6 +709,7 @@ func _animate(ev: Dictionary, after: Dictionary) -> void:
 		fl.id = ev.seat
 		ev.sim = Physics.simulate(view.world, [fl])
 	_ev = ev
+	_ev_before = view
 	_after = after
 	_frames = ev.sim.frames
 	_ids = view.world.pens.map(func(p): return p.id)
@@ -749,7 +755,13 @@ func _play_event(e: Dictionary) -> void:
 				_shaken = true
 				Fx.shake(table, lerpf(6.0, 16.0, clampf((e.speed - HARD_HIT) / 1200.0, 0.0, 1.0)))
 				Input.vibrate_handheld(25)
-			Sfx.play("hop", 0.12, lerpf(-22.0, 0.0, loud))
+			if e.speed > SCUFF_HIT and e.has("x"):
+				var at := Vector2(e.x, e.y)
+				Fx.burst(table, desk.to_screen(at), Color("ffe08a"))
+				var marks: Array = desk.scuffs.slice(-30)
+				marks.append([at, randf() * TAU, lerpf(18.0, 46.0, loud)])
+				desk.scuffs = marks
+			Sfx.play("hop", 0.12, lerpf(-22.0, 0.0, loud), _pitch(e.a, e.b))
 		"edge":
 			Sfx.play("hop", 0.05, -10.0)
 		"out":
@@ -758,6 +770,14 @@ func _play_event(e: Dictionary) -> void:
 			Sfx.play("capture")
 			Fx.burst(table, at, UI.COLORS[e.id])
 			_popup("Out!", UI.COLORS[e.id])
+
+
+## Heavier pens clack lower: the heavier of the two sets the pitch.
+func _pitch(a: int, b: int) -> float:
+	var mass := 0.0
+	for id in [a, b]:
+		mass = maxf(mass, Physics.spec(view.pens.get(id, "gel")).mass)
+	return clampf(1.6 - mass * 0.4, 0.8, 1.2)
 
 
 func _pen_in_frame(id: int) -> Dictionary:
@@ -780,6 +800,8 @@ func _shot_over() -> void:
 	if c in ev.self_outs:
 		Sfx.play("no_move", 0.0)
 		_popup("Oops!", UI.COLORS[0])
+		wait = 0.9
+	elif ev.round_winner == -1 and _so_close():
 		wait = 0.9
 	if ev.round_winner != -1:
 		await get_tree().create_timer(wait).timeout
@@ -805,6 +827,23 @@ func _knock_popups(knocks: Array) -> void:
 		by[k[0]].append(names[k[1]])
 	for b in by:
 		_popup("%s knocked off %s!" % [names[b], " & ".join(by[b])], UI.COLORS[b], true)
+		if by[b].size() >= 2:
+			Fx.popup(hud, STREAK[mini(by[b].size(), 3)], UI.COLORS[2], DESK_AT.y + _oy + 120, true)
+			Sfx.play("home", 0.0)
+
+
+## Turns: a pen that ended a flick right at the edge (and was moved by it) wobbles: "So close!".
+func _so_close() -> bool:
+	for p in view.world.pens:
+		if p.out or Physics.edge_distance(p.x, p.y) > SO_CLOSE:
+			continue
+		var before := Rules.pen_of(_ev_before, p.id)
+		if before.is_empty() or Vector2(before.x, before.y).distance_to(Vector2(p.x, p.y)) < 1.0:
+			continue
+		_popup("So close!", UI.COLORS[p.id])
+		Fx.shake(table, 4.0)  # a nervous wobble; the desk itself never turns
+		return true
+	return false
 
 
 ## The round's stamp: "Round 1: Zoe wins!".

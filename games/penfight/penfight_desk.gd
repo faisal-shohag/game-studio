@@ -34,6 +34,11 @@ var aims := {}
 var cooldowns := {}
 ## Real-time: pen id -> 0..1 age of the "ready" pulse.
 var pulses := {}
+## Scuff marks left by hard hits this round: [desk point, angle, length].
+var scuffs := []:
+	set(v):
+		scuffs = v
+		queue_redraw()
 var _grain := []  # [points, color, width]
 var _scratches := []  # [a, b, width]
 
@@ -70,6 +75,11 @@ func _draw() -> void:
 	_draw_floor()
 	_draw_top()
 	_draw_doodles()
+	for s in scuffs:
+		var at: Vector2 = s[0] - HALF
+		var d: Vector2 = Vector2.from_angle(s[1]) * s[2] / 2.0
+		draw_line(at - d, at + d, Color(0.3, 0.15, 0.05, 0.3), 4.0, true)
+		draw_line(at - d * 0.6 + d.orthogonal().normalized() * 5, at + d * 0.5 + d.orthogonal().normalized() * 5, Color(1, 0.9, 0.7, 0.25), 2.0, true)
 	for p in pens:  # pens tipping off go under the desk's edge, so draw them first
 		if p.fall > 0.0 and p.fall < 1.0:
 			_draw_one(p)
@@ -97,7 +107,8 @@ func _draw_cooldown(p: Dictionary) -> void:
 
 func _draw_one(p: Dictionary) -> void:
 	var f: float = p.fall
-	draw_pen(self, Vector2(p.x, p.y) - HALF, p.angle, p.type, colors.get(p.id, Color.WHITE), 1.0 - f * 0.7, f, 1.0 - f * 0.35)
+	var tumble := f * f * 1.4 * (1.0 if p.id % 2 == 0 else -1.0)  # tips over as it drops
+	draw_pen(self, Vector2(p.x, p.y) - HALF, p.angle + tumble, p.type, colors.get(p.id, Color.WHITE), 1.0 - f * 0.7, f, 1.0 - f * 0.35)
 
 
 func _draw_floor() -> void:
