@@ -293,14 +293,14 @@ func _roll(value: int) -> void:
 		ladders[c] += 1
 		await get_tree().create_timer(0.15).timeout
 		Sfx.play("home", 0.0)
-		await _glide(pawn, _at(c, ev.to), 0.55)
+		await _climb(pawn, _at(c, ev.to), UI.COLORS[c])
 		Fx.burst(table, pawn.position, UI.COLORS[c])
 	elif ev.kind == "snake":
 		snakes[c] += 1
 		await get_tree().create_timer(0.15).timeout
 		Sfx.play("capture")
 		Fx.shake(table)
-		await _glide(pawn, _at(c, ev.to), 0.65)
+		await _slide(pawn, ev.walk_to)
 	pawn.z_index = 0
 	if ev.to == Rules.FINISH:
 		Fx.burst(table, pawn.position, UI.COLORS[c])
@@ -319,10 +319,66 @@ func _roll(value: int) -> void:
 
 
 ## Ladder climb / snake slide: straight glide with a small lift.
-func _glide(pawn: Node2D, to: Vector2, dur: float) -> void:
+## Ladder: climbs rung by rung (little bounces) with a sparkle trail, squashes on arrival.
+func _climb(pawn: Node2D, to: Vector2, color: Color) -> void:
+	var from := pawn.position
+	var steps := maxi(3, int(from.distance_to(to) / 60.0))
+	var trail := _sparkles(color)
+	var step := func(k: float) -> void:
+		pawn.position = from.lerp(to, k)
+		pawn.lift = -absf(sin(k * steps * PI)) * 14.0
+		trail.position = pawn.position
 	var tw := pawn.create_tween()
-	tw.tween_method(pawn._hop_step.bind(pawn.position, to, 40.0), 0.0, 1.0, dur).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_method(step, 0.0, 1.0, 0.18 * steps)
 	await tw.finished
+	pawn.lift = 0.0
+	trail.emitting = false
+	get_tree().create_timer(1.0).timeout.connect(trail.queue_free)
+	pawn.squash = 1.0
+	pawn.create_tween().set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT).tween_property(pawn, "squash", 0.0, 0.5)
+
+
+## Snake: slides down the snake's body from head to tail at an even speed, wobbling a little.
+func _slide(pawn: Node2D, head: int) -> void:
+	var pts := board.snake_path(head)
+	var dist := PackedFloat32Array([0.0])  # arc length at each point
+	for i in range(1, pts.size()):
+		dist.append(dist[i - 1] + pts[i].distance_to(pts[i - 1]))
+	var total := dist[dist.size() - 1]
+	var step := func(k: float) -> void:
+		var d := k * total
+		var i := clampi(dist.bsearch(d), 1, pts.size() - 1)
+		var seg := dist[i] - dist[i - 1]
+		pawn.position = board.position + pts[i - 1].lerp(pts[i], (d - dist[i - 1]) / seg if seg > 0.0 else 1.0)
+		pawn.spin = sin(k * TAU * 3.0) * 0.25 * (1.0 - k)
+	var tw := pawn.create_tween()
+	tw.tween_method(step, 0.0, 1.0, clampf(total / 650.0, 0.7, 1.5)).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	await tw.finished
+	pawn.spin = 0.0
+
+
+## Little star sparkles that trail a climbing pawn; caller moves it and frees it.
+func _sparkles(color: Color) -> CPUParticles2D:
+	var fx := CPUParticles2D.new()
+	fx.z_index = 6
+	fx.amount = 24
+	fx.lifetime = 0.6
+	fx.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	fx.emission_sphere_radius = 22.0
+	fx.direction = Vector2.DOWN
+	fx.spread = 60.0
+	fx.initial_velocity_min = 30.0
+	fx.initial_velocity_max = 90.0
+	fx.gravity = Vector2(0, 120)
+	fx.scale_amount_min = 4.0
+	fx.scale_amount_max = 8.0
+	var ramp := Gradient.new()
+	ramp.set_color(0, UI.COLORS[2].lightened(0.4))
+	ramp.set_color(1, Color(color.lightened(0.3), 0.0))
+	fx.color_ramp = ramp
+	table.add_child(fx)
+	fx.emitting = true
+	return fx
 
 
 ## Big bouncy word over the board ("Ladder!", "Bonus roll!").

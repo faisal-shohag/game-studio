@@ -39,6 +39,47 @@ func snake_path(head: int) -> PackedVector2Array:
 	return pts
 
 
+## Direction a snake's head faces (away from its body).
+static func head_dir(pts: PackedVector2Array) -> Vector2:
+	return (pts[0] - pts[6]).normalized()
+
+
+## Forked tongues that flick out now and then. Its own node, so only these few lines
+## redraw each frame, not the whole board.
+class Tongues extends Node2D:
+	const FLICK := 0.45  # seconds out and back
+	var heads := []  # [at, fwd, next flick time]
+
+	func _process(_delta: float) -> void:
+		queue_redraw()
+
+	func _draw() -> void:
+		var t := Time.get_ticks_msec() / 1000.0
+		for h in heads:
+			if t > h[2] + FLICK:
+				h[2] = t + randf_range(1.5, 4.5)
+			var k: float = (t - h[2]) / FLICK
+			if k < 0.0:
+				continue
+			var out := sin(k * PI) * 22.0
+			var fwd: Vector2 = h[1].rotated(sin(t * 40.0) * 0.12)  # quick flutter
+			var side := fwd.orthogonal()
+			var base: Vector2 = h[0] + h[1] * 20
+			var tip := base + fwd * out
+			draw_line(base, tip, Color("ff4757"), 4, true)
+			draw_line(tip, tip + (fwd + side * 0.6).normalized() * out * 0.4, Color("ff4757"), 3, true)
+			draw_line(tip, tip + (fwd - side * 0.6).normalized() * out * 0.4, Color("ff4757"), 3, true)
+
+
+func _ready() -> void:
+	var tongues := Tongues.new()
+	var t := Time.get_ticks_msec() / 1000.0
+	for head in Rules.SNAKES:
+		var pts := snake_path(head)
+		tongues.heads.append([pts[0], head_dir(pts), t + randf_range(0.3, 4.0)])
+	add_child(tongues)
+
+
 func _draw() -> void:
 	# frame + squares
 	var frame := UI.box(Color.WHITE, 0, 28)
@@ -100,16 +141,12 @@ func _draw_snake(pts: PackedVector2Array, color: Color) -> void:
 		draw_circle(pts[i], r.call(i), color if stripe else color.darkened(0.25))
 	for i in range(n - 1, 0, -6):  # belly shine
 		draw_circle(pts[i] + Vector2(-3, -3), r.call(i) * 0.35, Color(1, 1, 1, 0.25))
-	# head: wider, eyes looking away from the body, little forked tongue
+	# head: wider, eyes looking away from the body (the tongue is animated by Tongues)
 	var head := pts[0]
-	var fwd := (pts[0] - pts[2]).normalized()
+	var fwd := head_dir(pts)
 	var side := fwd.orthogonal()
 	draw_circle(head, 25, UI.INK)
 	draw_circle(head, 21, color)
-	var tip := head + fwd * 36
-	draw_line(head + fwd * 18, tip, Color("ff4757"), 4, true)
-	draw_line(tip, tip + (fwd + side * 0.6).normalized() * 9, Color("ff4757"), 3, true)
-	draw_line(tip, tip + (fwd - side * 0.6).normalized() * 9, Color("ff4757"), 3, true)
 	for s in [-1, 1]:
 		var eye: Vector2 = head + side * 9 * s + fwd * 6
 		draw_circle(eye, 7, Color.WHITE)
