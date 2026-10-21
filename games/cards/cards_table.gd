@@ -24,11 +24,28 @@ var pending := 0:
 		queue_redraw()
 var discards := []  # Card nodes, top last
 var _spin := 0.0
+var _boost := 0.0  # extra ring speed after a Reverse, dying away
 
 
 func _process(delta: float) -> void:
-	_spin += delta * 0.35 * dir
+	_spin += delta * (0.35 + _boost) * dir
+	_boost = move_toward(_boost, 0.0, delta * 5.0)
 	queue_redraw()
+
+
+## The arrows whirl round the new way.
+func spin_burst() -> void:
+	_boost = 9.0
+
+
+## The cards underneath jostle when a new one lands.
+func wobble() -> void:
+	for i in discards.size() - 1:
+		var d: Node2D = discards[i]
+		var rest := tilt(d.id)
+		var tw := d.create_tween().set_trans(Tween.TRANS_SINE)
+		tw.tween_property(d, "rotation", rest + randf_range(-0.12, 0.12), 0.08)
+		tw.tween_property(d, "rotation", rest, 0.25).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
 
 ## Shows these discards (bottom to top) without animation.

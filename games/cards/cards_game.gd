@@ -96,8 +96,57 @@ func _ready() -> void:
 func _begin(v: Dictionary) -> void:
 	view = v
 	_place_panels()
+	if v.discard.size() == 1 and v.counts.values().all(func(n): return n == Rules.HAND):
+		busy = true  # events that arrive meanwhile wait in `pending`
+		await _deal()
+		busy = false
 	_refresh()
 	_next()
+
+
+## Seven rounds of cards fly from the pile to every seat, then the first discard turns over.
+func _deal() -> void:
+	hint.text = "Dealing..."
+	var colors: Array = view.colors
+	var start := colors.find(_base)
+	var dealt: int = view.pile_count + 1 + Rules.HAND * colors.size()
+	table.pile_count = dealt
+	table.set_discards([])
+	var mine := []
+	for c in colors:
+		fans[c].count = 0
+		panels[c].status = "0 cards"
+	for k in Rules.HAND:
+		for i in colors.size():
+			var c: int = colors[(start + 1 + i) % colors.size()]  # dealer's left first
+			dealt -= 1
+			table.pile_count = dealt
+			Sfx.play("hop", 0.15)
+			if c == me:
+				mine.append(view.hand[k])
+				hand.set_cards(mine, table.to_global(Table.PILE_AT))
+			else:
+				var card := Card.new()
+				card.z_index = 10
+				table.add_child(card)
+				card.position = Table.PILE_AT
+				card.fly_to(table.to_local(_seat_pos(c)), randf_range(-0.4, 0.4), 0.3, 0.35)
+				get_tree().create_timer(0.3).timeout.connect(func():
+					card.queue_free()
+					fans[c].count += 1
+					panels[c].status = "1 card" if fans[c].count == 1 else "%d cards" % fans[c].count)
+			await get_tree().create_timer(0.07).timeout
+	await get_tree().create_timer(0.4).timeout
+	var first := Card.new()
+	first.id = view.discard[0]
+	first.z_index = 10
+	table.add_child(first)
+	first.position = Table.PILE_AT
+	first.flip(0.3)
+	await first.fly_to(Table.DISCARD_AT, table.tilt(first.id), 0.35, 1.0)
+	table.push(first)
+	table.pile_count = view.pile_count
+	Sfx.play("hop")
 
 
 func _build(colors: Array) -> void:
@@ -252,6 +301,7 @@ func _next() -> void:
 	_refresh()
 	if who == "human" and c != _turn_seen:
 		Sfx.play("your_turn", 0.0)
+		Input.vibrate_handheld(40)
 	_turn_seen = c
 	if who == "bot":
 		panels[c].note = "Thinking..."
@@ -404,7 +454,11 @@ func _animate(ev: Dictionary, v: Dictionary) -> void:
 		"play":
 			await _fly_play(ev)
 			Sfx.play("hop")
+			table.wobble()
 			var k := Rules.kind_of(ev.id)
+			if k == Rules.REVERSE:
+				table.dir = v.dir
+				table.spin_burst()
 			if k == Rules.WILD4:
 				plus4[c] += 1
 			table.top_color = UI.COLORS[ev.top_color]
@@ -413,11 +467,11 @@ func _animate(ev: Dictionary, v: Dictionary) -> void:
 				Sfx.play("home", 0.0)
 				if v.phase != "over":
 					_popup("%s: %s!" % [names[c], PLACES[v.winners.find(c)]], col, true)
-			elif k == Rules.SKIP or ev.skipped != -1:
-				_popup("Skip!" if k == Rules.SKIP else "Reverse!", col)
-			elif k == Rules.REVERSE:
-				_popup("Reverse!", col)
-			elif k == Rules.DRAW2 or k == Rules.WILD4:
+			elif k == Rules.SKIP or k == Rules.REVERSE:
+				_stamp("SKIP!" if k == Rules.SKIP else "REVERSE!", col)
+			elif k == Rules.WILD4:
+				_stamp("+%d!" % ev.pending, UI.COLORS[ev.top_color])
+			elif k == Rules.DRAW2:
 				_popup("+%d!" % ev.pending, col)
 			elif k == Rules.WILD:
 				_popup(UI.NAMES[ev.top_color] + "!", UI.COLORS[ev.top_color])
@@ -494,6 +548,34 @@ func _fly_draw(c: int, n: int, v: Dictionary) -> void:
 
 func _popup(text: String, color: Color, big := false) -> void:
 	Fx.popup(hud, text, color, table.position.y, big)
+
+
+## A big tilted stamp slammed onto the table (Skip, Reverse, +4).
+func _stamp(text: String, color: Color) -> void:
+	var stamp := PanelContainer.new()
+	var style := UI.box(color, 0, 36)
+	style.set_border_width_all(12)
+	style.border_color = Color.WHITE
+	style.set_content_margin_all(28)
+	style.content_margin_bottom = 20
+	stamp.add_theme_stylebox_override("panel", style)
+	var l := UI.label(text, 120)
+	l.add_theme_constant_override("outline_size", 30)
+	stamp.add_child(l)
+	stamp.modulate.a = 0.0
+	hud.add_child(stamp)
+	await get_tree().process_frame  # let it size itself
+	stamp.position = Vector2(540, table.position.y) - stamp.size / 2
+	stamp.pivot_offset = stamp.size / 2
+	stamp.rotation = -0.2
+	stamp.scale = Vector2(2.6, 2.6)
+	var tw := stamp.create_tween()
+	tw.tween_property(stamp, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(stamp, "modulate:a", 1.0, 0.1)
+	tw.tween_callback(Fx.shake.bind(table_root))
+	tw.tween_interval(0.6)
+	tw.tween_property(stamp, "modulate:a", 0.0, 0.3)
+	tw.tween_callback(stamp.queue_free)
 
 
 # --- overlays -----------------------------------------------------------------

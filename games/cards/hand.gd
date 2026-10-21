@@ -1,10 +1,11 @@
-## The local player's hand: cards fanned along a gentle arc, overlapping more as it grows.
-## Tap a card to emit picked(id).
+## The local player's hand: cards fanned along a gentle arc, overlapping more as it grows,
+## sorted by color then number (wilds at the right end). Tap a card to emit picked(id).
 extends Node2D
 
 signal picked(id: int)
 
 const Card = preload("res://games/cards/card.gd")
+const Rules = preload("res://games/cards/cards_rules.gd")
 const WIDTH := 780.0  # spread of card centers at most
 const STEP := 140.0  # gap between card centers in a small hand
 
@@ -33,7 +34,13 @@ func set_cards(ids: Array, from := Vector2.INF) -> void:
 			else:
 				card.face_up = true
 	order = ids.duplicate()
+	order.sort_custom(func(a, b): return _rank(a) < _rank(b))
 	_layout()
+
+
+static func _rank(id: int) -> int:
+	var c := Rules.color_of(id)
+	return ((4 if c == -1 else c) * 16 + Rules.kind_of(id)) * 200 + id
 
 
 ## Hands over a card (to fly it to the pile); it is no longer part of the hand.

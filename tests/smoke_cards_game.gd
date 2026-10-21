@@ -6,6 +6,10 @@ extends Node
 func _ready() -> void:
 	Engine.time_scale = 50
 	var game = load("res://games/cards/cards_game.tscn").instantiate()
+	if game.get_script() == null:  # script failed to parse: fail now instead of hanging
+		printerr("FAIL: cards scene did not load")
+		get_tree().quit(1)
+		return
 	game.seats = ["bot", "bot", "bot", "bot"]
 	get_tree().root.add_child.call_deferred(game)
 	for k in 60000:
