@@ -1,7 +1,7 @@
 ## Home: logo, playable game cards, locked "coming soon" cards, name chip.
 extends "res://ui/screen.gd"
 
-const SOON := ["Color Cards", "Carrom", "Penfight"]
+const SOON := ["Carrom", "Penfight"]
 
 
 func _init() -> void:
@@ -37,6 +37,9 @@ func build() -> void:
 	var snakes := UI.tile(UI.COLORS[1], UI.icon("ladder", Color.WHITE, 200), "SNAKES & LADDERS", "2-4 players", Vector2(940, 250), 64)
 	snakes.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "snakes"}))
 	content.add_child(snakes)
+	var cards := UI.tile(UI.COLORS[3], UI.icon("cards", Color.WHITE, 200), "COLOR CARDS", "2-4 players", Vector2(940, 250), 80)
+	cards.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "cards"}))
+	content.add_child(cards)
 
 	var grid := GridContainer.new()
 	grid.columns = 2

@@ -2,6 +2,7 @@
 extends Control
 
 const PawnArt = preload("res://games/shared/pawn_art.gd")
+const CardArt = preload("res://games/cards/card_art.gd")
 
 var kind := ""
 var color := Color.WHITE
@@ -106,6 +107,11 @@ func _draw() -> void:
 			draw_polyline(body, UI.COLORS[1], 9 * u, true)
 			draw_circle(body[body.size() - 1], 10 * u, ink)
 			draw_circle(body[body.size() - 1], 7 * u, UI.COLORS[1])
+		"cards":  # three fanned cards: red 7, yellow skip, a wild on top
+			for k in 3:
+				var a := (k - 1) * 0.32
+				var xf := Transform2D(a, c + Vector2((k - 1) * 22, 4 + absf(k - 1) * 6) * u).scaled_local(Vector2(0.3, 0.3) * u)
+				CardArt.draw(self, [14, 69, 104][k], true, xf)
 		"board":
 			var b := Rect2(c - Vector2(42, 42) * u, Vector2(84, 84) * u)
 			draw_rect(b.grow(4 * u), ink)
