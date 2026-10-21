@@ -5,6 +5,7 @@ const PawnArt = preload("res://games/shared/pawn_art.gd")
 const CardArt = preload("res://games/cards/card_art.gd")
 const FaceArt = preload("res://games/shared/face_art.gd")
 const Avatar = preload("res://core/avatar.gd")
+const CarromBoard = preload("res://games/carrom/carrom_board.gd")
 
 var kind := ""
 var color := Color.WHITE
@@ -147,6 +148,19 @@ func _draw() -> void:
 				var a := (k - 1) * 0.32
 				var xf := Transform2D(a, c + Vector2((k - 1) * 22, 4 + absf(k - 1) * 6) * u).scaled_local(Vector2(0.3, 0.3) * u)
 				CardArt.draw(self, [14, 69, 104][k], true, xf)
+		"carrom":  # a board corner: frame, pocket, baseline circle, a few coins and the striker
+			var b := Rect2(c - Vector2(44, 44) * u, Vector2(88, 88) * u)
+			draw_rect(b.grow(5 * u), ink)
+			draw_rect(b, CarromBoard.WOOD)
+			var ply := b.grow(-10 * u)
+			draw_rect(ply, CarromBoard.PLY)
+			var pocket := ply.position + Vector2(9, 9) * u
+			draw_circle(pocket, 9 * u, Color("16110e"))
+			draw_line(ply.position + Vector2(20, 58) * u, ply.position + Vector2(68, 58) * u, CarromBoard.LINE, 2 * u)
+			draw_circle(ply.position + Vector2(16, 58) * u, 5 * u, CarromBoard.RED)
+			for coin in [[Vector2(40, 22), 0], [Vector2(27, 35), 1], [Vector2(50, 38), 2], [Vector2(58, 20), 1]]:
+				CarromBoard.draw_piece(self, ply.position + coin[0] * u, coin[1], 0.0, u * 0.38)
+			CarromBoard.draw_piece(self, ply.position + Vector2(42, 58) * u, 3, 0.4, u * 0.38)
 		"board":
 			var b := Rect2(c - Vector2(42, 42) * u, Vector2(84, 84) * u)
 			draw_rect(b.grow(4 * u), ink)

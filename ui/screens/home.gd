@@ -1,7 +1,7 @@
 ## Home: logo, playable game cards, locked "coming soon" cards, name chip.
 extends "res://ui/screen.gd"
 
-const SOON := ["Carrom", "Penfight"]
+const SOON := ["Penfight"]
 
 
 func _init() -> void:
@@ -48,22 +48,25 @@ func build() -> void:
 	content.add_child(logo)
 	content.add_child(UI.label("Classic games, together", 44, Color(1, 1, 1, 0.8)))
 
-	var ludo := UI.tile(UI.COLORS[0], UI.icon("board", Color.WHITE, 200), "LUDO", "2-4 players", Vector2(940, 250), 96)
+	var ludo := UI.tile(UI.COLORS[0], UI.icon("board", Color.WHITE, 200), "LUDO", "2-4 players", Vector2(940, 220), 96)
 	ludo.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "ludo"}))
 	content.add_child(ludo)
-	var snakes := UI.tile(UI.COLORS[1], UI.icon("ladder", Color.WHITE, 200), "SNAKES & LADDERS", "2-4 players", Vector2(940, 250), 64)
+	var snakes := UI.tile(UI.COLORS[1], UI.icon("ladder", Color.WHITE, 200), "SNAKES & LADDERS", "2-4 players", Vector2(940, 220), 64)
 	snakes.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "snakes"}))
 	content.add_child(snakes)
-	var cards := UI.tile(UI.COLORS[3], UI.icon("cards", Color.WHITE, 200), "COLOR CARDS", "2-4 players", Vector2(940, 250), 80)
+	var cards := UI.tile(UI.COLORS[3], UI.icon("cards", Color.WHITE, 200), "COLOR CARDS", "2-4 players", Vector2(940, 220), 80)
 	cards.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "cards"}))
 	content.add_child(cards)
+	var carrom := UI.tile(UI.COLORS[2], UI.icon("carrom", Color.WHITE, 200), "CARROM", "2-4 players", Vector2(940, 220), 96)
+	carrom.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "carrom"}))
+	content.add_child(carrom)
 
 	var grid := GridContainer.new()
-	grid.columns = 2
+	grid.columns = 1
 	grid.add_theme_constant_override("h_separation", 30)
 	grid.add_theme_constant_override("v_separation", 30)
 	for game in SOON:
-		var t := UI.tile(UI.LOCKED, UI.icon("lock", Color.WHITE, 80), game, "Coming soon", Vector2(455, 190), 38)
+		var t := UI.tile(UI.LOCKED, UI.icon("lock", Color.WHITE, 80), game, "Coming soon", Vector2(940, 130), 44)
 		t.disabled = true
 		grid.add_child(t)
 	content.add_child(grid)

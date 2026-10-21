@@ -1,6 +1,7 @@
-## A player at the card table: face portrait with the name under it, a card-count badge, a note
-## bubble ("Thinking...", "1st place"), a glow on their turn, and their hand as a fan of backs
-## pointing at the table. Shows a CATCH! bubble when they forgot to call their last card.
+## A player at the table: face portrait with the name under it, a count badge, a note bubble
+## ("Thinking...", "1st place") and a glow on their turn. Card games show the hand as a fan of
+## backs pointing at the table and a CATCH! bubble when they forgot to call their last card;
+## Carrom shows the score as the badge and a coin chip for the color they play.
 extends Control
 
 signal catch_pressed
@@ -21,6 +22,15 @@ var fan_visible := true
 var count := 0:
 	set(v):
 		count = v
+		queue_redraw()
+var badge := "":  # shown instead of the count when set ("230")
+	set(v):
+		badge = v
+		queue_redraw()
+## Carrom: the color this player pockets, drawn as a coin on the bottom-right corner (null = none).
+var coin = null:
+	set(v):
+		coin = v
 		queue_redraw()
 var note := "":
 	set(v):
@@ -107,11 +117,23 @@ func _draw() -> void:
 		draw_style_box(glow, Rect2(Vector2.ZERO, size).grow(12))
 	if not Avatar.draw(self, c, PORTRAIT * 0.92, avatar, color, false, happy):
 		FaceArt.draw(self, c, PORTRAIT * 0.92, color, variant, happy)
-	# card-count badge on the top-right corner
+	# count badge on the top-right corner; a pill when the text is wide
 	var at := Vector2(PORTRAIT - 6, 8)
-	draw_circle(at, 30, UI.INK)
-	draw_circle(at, 25, UI.COLORS[0] if count == 1 else UI.ACCENT)
-	CardArt.text(self, str(count), at, 36)
+	var text := badge if badge != "" else str(count)
+	var half := maxf(0.0, (UI.FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 36).x - 30) / 2)
+	var fill: Color = UI.COLORS[0] if count == 1 and badge == "" else UI.ACCENT
+	for k in 2:
+		var r := 30.0 - k * 5
+		var col := UI.INK if k == 0 else fill
+		draw_circle(at - Vector2(half, 0), r, col)
+		draw_circle(at + Vector2(half, 0), r, col)
+		draw_rect(Rect2(at - Vector2(half, r), Vector2(half * 2, r * 2)), col)
+	CardArt.text(self, text, at, 36)
+	if coin is Color:
+		var cp := Vector2(PORTRAIT - 8, PORTRAIT - 14)
+		draw_circle(cp, 24, UI.INK)
+		draw_circle(cp, 19, coin)
+		draw_arc(cp, 12, 0, TAU, 24, coin.darkened(0.3) if coin.get_luminance() > 0.5 else coin.lightened(0.3), 3, true)
 	if note != "":
 		var w := UI.FONT.get_string_size(note, HORIZONTAL_ALIGNMENT_LEFT, -1, 30).x + 36
 		var pill := StyleBoxFlat.new()
