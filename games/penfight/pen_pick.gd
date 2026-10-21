@@ -16,6 +16,7 @@ var title := "Pick your pen"
 var color := Color.WHITE  # the picker's color: pens are drawn in it
 var chosen := ""
 var _cards := []
+var _head: Label
 
 
 func _ready() -> void:
@@ -27,11 +28,11 @@ func _ready() -> void:
 	dim.size = size
 	dim.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(dim)
-	var head := UI.label(title, 80)
-	head.size = Vector2(1080, 110)
-	head.position = Vector2(0, oy + 320)
-	head.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	add_child(head)
+	_head = UI.label(title, 80)
+	_head.size = Vector2(1080, 110)
+	_head.position = Vector2(0, oy + 320)
+	_head.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	add_child(_head)
 	for k in Physics.TYPES.size():
 		var type: String = Physics.TYPES[k]
 		var card := UI.button("", UI.INK.lightened(0.25), CARD)
@@ -53,6 +54,13 @@ func _ready() -> void:
 		_cards.append(art)
 	modulate.a = 0.0
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.25)
+
+
+## Changes the heading once shown (a countdown over LAN).
+func set_title(text: String) -> void:
+	title = text
+	if _head:
+		_head.text = text
 
 
 func _process(_delta: float) -> void:

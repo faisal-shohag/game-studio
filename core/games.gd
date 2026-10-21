@@ -11,6 +11,24 @@ const LIST := {
 	"snakes": {"title": "SNAKES & LADDERS", "name": "Snakes & Ladders", "scene": "res://games/snakes/snakes_game.tscn", "color": 1, "lan": true, "local": true, "faces": false},
 	"cards": {"title": "COLOR CARDS", "name": "Color Cards", "scene": "res://games/cards/cards_game.tscn", "color": 3, "lan": true, "local": false, "faces": true},
 	"carrom": {"title": "CARROM", "name": "Carrom", "scene": "res://games/carrom/carrom_game.tscn", "color": 2, "lan": true, "local": true, "faces": true, "variants": ["classic", "freestyle"]},
-	"penfight": {"title": "PEN FIGHT", "name": "Pen Fight", "scene": "res://games/penfight/penfight_game.tscn", "color": 0, "lan": false, "local": true, "faces": true, "variants": ["turns", "realtime"], "rounds": [1, 3]},
+	"penfight": {"title": "PEN FIGHT", "name": "Pen Fight", "scene": "res://games/penfight/penfight_game.tscn", "color": 0, "lan": true, "local": true, "faces": true, "variants": ["turns", "realtime"], "rounds": [1, 3]},
 }
 const BOT_NAMES := ["Bot Rina", "Bot Max", "Bot Zoe", "Bot Leo"]
+const LABELS := {"realtime": "Real-time"}  # how a variant is written when "capitalize" gets it wrong
+
+
+## "Turns", "Real-time".
+static func label(variant: String) -> String:
+	return LABELS.get(variant, variant.capitalize())
+
+
+## "Pen Fight (Turns, best of 3)", "Carrom (Classic)", "Ludo".
+static func room_name(game: String, variant: String, rounds: int) -> String:
+	var parts := []
+	if variant != "":
+		parts.append(label(variant))
+	if rounds > 1:
+		parts.append("best of %d" % rounds)
+	elif rounds == 1:
+		parts.append("1 round")
+	return LIST[game].name + (" (%s)" % ", ".join(parts) if not parts.is_empty() else "")

@@ -1,5 +1,6 @@
 ## Two-process LAN test through the real room screens + game. Run both (game: ludo | snakes | cards |
-## carrom, which plays Classic, or Freestyle with `freestyle` added to the host command):
+## carrom, which plays Classic, or Freestyle with `freestyle` added to the host command | penfight,
+## which plays Turns best of 3, or Real-time with `realtime` added to the host command):
 ##   godot --headless --path . tests/run.tscn -- tests/net_game.gd host ludo
 ##   godot --headless --path . tests/run.tscn -- tests/net_game.gd join ludo
 ## Each auto-taps its own seat; both print FINAL board, which must match.
@@ -11,13 +12,19 @@
 ## it received carried only its own cards (until game over, when every hand is revealed).
 ## Carrom: each phone shoots random legal shots for its seat; FINAL compares coin positions
 ## (rounded), scores and winners, so the guest's replays must have snapped to the host's state.
+## Pen Fight: each phone picks a random pen, then flicks random legal flicks for its seat (Real-time:
+## whenever its cooldown allows); FINAL compares round wins, winners, which pens are out and each
+## seat's flicks (the guest's must be there: its flicks reached the host).
 extends Node
 
 
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	var hosting := "host" in args
-	var game_id := "snakes" if "snakes" in args else "cards" if "cards" in args else "carrom" if "carrom" in args else "ludo"
+	var game_id := "ludo"
+	for g in ["snakes", "cards", "carrom", "penfight"]:
+		if g in args:
+			game_id = g
 	Engine.time_scale = 20
 	UI.settings.set_value("player", "name", "Host Hana" if hosting else "Guest Gil")  # not saved to disk
 	var pic := Image.create(300, 300, false, Image.FORMAT_RGB8)
@@ -25,8 +32,14 @@ func _ready() -> void:
 	UI._avatar = {"photo": UI.Avatar.photo_from(pic, Rect2(0, 0, 300, 300))} if hosting else {"face": 5}  # not saved either
 	await get_tree().process_frame
 	if hosting:
-		var variant := "" if game_id != "carrom" else "freestyle" if "freestyle" in args else "classic"
-		UI.go("res://ui/screens/lan_room.gd", {"hosting": true, "game": game_id, "variant": variant})
+		var variant := ""
+		var rounds := 0
+		if game_id == "carrom":
+			variant = "freestyle" if "freestyle" in args else "classic"
+		elif game_id == "penfight":
+			variant = "realtime" if "realtime" in args else "turns"
+			rounds = 3
+		UI.go("res://ui/screens/lan_room.gd", {"hosting": true, "game": game_id, "variant": variant, "rounds": rounds})
 		var room: Node = UI.current
 		while multiplayer.get_peers().is_empty():
 			await get_tree().process_frame
@@ -54,10 +67,27 @@ func _ready() -> void:
 				leaks.append(ev))
 	for k in 200000:
 		await get_tree().process_frame
-		if k == 300 and "drop" in args:
+		if k == (60 if game_id == "penfight" else 300) and "drop" in args:  # Pen Fight Real-time is over fast
 			print("client leaving mid-game")
 			get_tree().quit()
 			return
+		if game_id == "penfight":
+			if game.view.get("phase") == "over" and game._results != null:
+				break
+			if game._pick != null:  # pick as the overlay would, without saving the choice to disk
+				game._pick.queue_free()
+				game._pick = null
+				var type: String = game.Physics.TYPES.pick_random()
+				if hosting:
+					game._host_pick(game.me, type, 0)
+				else:
+					game.waiting_host = true
+					game._pick_request.rpc_id(1, type)
+			elif game.variant == "turns" and game._my_turn():
+				game._intent(_pen_flick(game), game.me)
+			elif game.variant == "realtime" and game.can_flick(game.me):
+				game.live_flick(game.me, _pen_flick(game))
+			continue
 		if game_id == "carrom":
 			if game.view.get("phase") == "over":
 				break
@@ -92,12 +122,26 @@ func _ready() -> void:
 	await get_tree().create_timer(40.0).timeout
 	var fresh: Node = get_tree().root.get_node_or_null("Screen")
 	# Carrom: the shot clock may already have fired on one phone, so compare what a restart keeps
-	print("RESTARTED ", fresh != game, " ", [fresh.variant, fresh.view.colors] if game_id == "carrom" else _board(fresh))
+	print("RESTARTED ", fresh != game, " ", [fresh.variant, fresh.view.colors] if game_id == "carrom"
+		else [fresh.variant, fresh.rounds, fresh.view.colors] if game_id == "penfight" else _board(fresh))
 	get_tree().quit()
+
+
+## A random flick at one of the other pens still on the desk.
+func _pen_flick(game: Node) -> Dictionary:
+	var mine: Dictionary = game.Rules.pen_of(game.view, game.me)
+	var others: Array = game.view.world.pens.filter(func(p): return p.id != game.me and not p.out)
+	var target: Dictionary = others.pick_random() if not others.is_empty() else mine
+	var aim := Vector2(target.x - mine.x, target.y - mine.y).angle() + randf_range(-0.3, 0.3)
+	return {"grab": randf_range(-0.6, 0.6), "angle": wrapf(aim, -PI, PI), "power": randf_range(0.4, 1.0)}
 
 
 ## What both phones must agree on. Cards: public info only (a client has no state).
 func _board(game: Node) -> Array:
+	if game.get("view") != null and game.view.has("round_wins"):  # Pen Fight
+		var v: Dictionary = game.view
+		var flicks: Array = v.colors.map(func(c): return v.stats[c].flicks)
+		return [v.phase, v.mode, v.round_wins, v.winners, v.world.pens.map(func(p): return [p.id, p.out]), flicks]
 	if game.get("view") != null and game.view.has("pieces"):  # Carrom
 		var v: Dictionary = game.view
 		var coins: Array = v.pieces.map(func(p): return [p.id, roundi(p.x), roundi(p.y)])

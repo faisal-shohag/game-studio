@@ -17,6 +17,7 @@ var hosting := false
 var join_ip := ""
 var game := "ludo"  # host: set by the menu; joiner: taken from the host's _sync
 var variant := ""  # the game's rule set ("classic"), fixed when the room is made; sent like `game`
+var rounds := 0  # the match length (Pen Fight), fixed like `variant`; 0 = the game has none
 var owners := [1, 0, 0, 0]  # peer id per color; 0 = bot, -1 = off
 var names := ["", "", "", ""]  # player names per color (bots/off filled at start)
 var avatars := [{}, {}, {}, {}]  # players' avatars per color ({} = bot, off or not sent yet)
@@ -120,9 +121,9 @@ func build() -> void:
 	_refresh()
 
 
-## "Carrom (Classic)", or just the game's name.
+## "Pen Fight (Turns, best of 3)", "Carrom (Classic)", or just the game's name.
 func _room_name() -> String:
-	return Games.LIST[game].name + (" (%s)" % variant.capitalize() if variant != "" else "")
+	return Games.room_name(game, variant, rounds)
 
 
 ## The room QR, big over everything; a tap or back closes it.
@@ -188,7 +189,7 @@ func _on_peer_joined(id: int) -> void:
 	owners[free] = id
 	names[free] = "Player"
 	avatars[free] = {}
-	_sync.rpc(game, variant, owners, names, avatars)
+	_sync.rpc(game, variant, rounds, owners, names, avatars)
 
 
 func _on_peer_left(id: int) -> void:
@@ -198,7 +199,7 @@ func _on_peer_left(id: int) -> void:
 		owners[c] = 0
 		names[c] = ""
 		avatars[c] = {}
-		_sync.rpc(game, variant, owners, names, avatars)
+		_sync.rpc(game, variant, rounds, owners, names, avatars)
 		_announce.rpc("%s left" % who, false)
 
 
@@ -212,7 +213,7 @@ func _hello(player_name: String, avatar: Dictionary) -> void:
 	var clean := player_name.strip_edges().left(UI.NAME_MAX)
 	names[c] = clean if clean != "" else "Player"
 	avatars[c] = Avatar.clean(avatar)
-	_sync.rpc(game, variant, owners, names, avatars)
+	_sync.rpc(game, variant, rounds, owners, names, avatars)
 	_announce.rpc("%s joined!" % names[c], true)
 
 
@@ -226,14 +227,15 @@ func _announce(text: String, joined: bool) -> void:
 func _cycle(c: int) -> void:
 	if hosting and owners[c] <= 0:
 		owners[c] = -1 if owners[c] == 0 else 0
-		_sync.rpc(game, variant, owners, names, avatars)
+		_sync.rpc(game, variant, rounds, owners, names, avatars)
 
 
 @rpc("authority", "call_local", "reliable")
-func _sync(g: String, v: String, o: Array, n: Array, a: Array) -> void:
+func _sync(g: String, v: String, r: int, o: Array, n: Array, a: Array) -> void:
 	if g in Games.LIST:
 		game = g
 		variant = v if v in Games.LIST[g].get("variants", []) else ""
+		rounds = r if r in Games.LIST[g].get("rounds", []) else 0
 	owners = o
 	names = n
 	avatars = a
@@ -284,15 +286,18 @@ func _on_start() -> void:
 	for c in 4:
 		if owners[c] == 0:
 			full[c] = Games.BOT_NAMES[c]
-	_start.rpc(game, variant, owners, full, avatars)
+	_start.rpc(game, variant, rounds, owners, full, avatars)
 
 
 @rpc("authority", "call_local", "reliable")
-func _start(g: String, v: String, o: Array, n: Array, a: Array) -> void:
-	if not g in Games.LIST or (v != "" and not v in Games.LIST[g].get("variants", [])):  # host's app is newer
+func _start(g: String, v: String, r: int, o: Array, n: Array, a: Array) -> void:
+	if (not g in Games.LIST or (v != "" and not v in Games.LIST[g].get("variants", []))
+			or (r != 0 and not r in Games.LIST[g].get("rounds", []))):  # host's app is newer
 		_fail("Update the app to play this game")
 		return
 	var props := {"owners": o, "names": n, "avatars": a}
 	if v != "":
 		props["variant"] = v
+	if r != 0:
+		props["rounds"] = r
 	UI.go(Games.LIST[g].scene, props)  # becomes /root/Screen on every phone

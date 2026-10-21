@@ -3,7 +3,8 @@
 ## friends flick from their own sides of it.
 ## Same turn loop as carrom_game.gd: a flick goes through _intent -> _host_do, which runs the rules
 ## (and the physics) and queues the event; events animate one at a time from the frames the
-## physics recorded, then the screen catches up with the state.
+## physics recorded, then the screen catches up with the state. Pen picks, new rounds and the end
+## of a Real-time round go through the same queue, so the screen never skips ahead of a flick.
 ##
 ## Before round 1 everyone picks a pen (bots at random, people on a card overlay). Aiming: touch
 ## anywhere on your pen (that is where the flick lands) and pull back. The arrow points the other
@@ -14,6 +15,14 @@
 ## its cooldown ring has run out, and every finger aims on its own, so pass-and-play friends can
 ## flick at once (a touch takes the nearest pen of a person on this phone). Bots wait a moment once
 ## ready, then weigh a few short simulations, one per slice, and flick.
+##
+## Over LAN the host decides everything. Turns works like Carrom: a guest sends only
+## {grab, angle, power}; the host flicks and sends everyone the flick and the state after it; each
+## phone replays the flick with its own physics, then snaps to the host's state. Real-time: the
+## host runs the desk and sends snapshots ~15 times a second (unreliable, newest wins) plus
+## reliable batches of what happened (hits, pens going over, knock-offs). Guests draw the desk
+## about 100 ms behind the newest snapshot, between two snapshots, and send their flicks to the
+## host. Each phone picks its own pen; after PICK_TIME the host picks for anyone still choosing.
 extends Node2D
 
 const Rules = preload("res://games/penfight/pen_rules.gd")
@@ -39,19 +48,27 @@ const HARD_HIT := 900.0  # a contact this fast shakes the desk
 const LIVE_STEP := 1.0 / 30.0  # Real-time: longest slice of time stepped at once
 const PULSE_TIME := 0.45  # Real-time: the "ready" pulse
 const SETTLE := 0.6  # Real-time: seconds pens keep tipping off after a round is decided
+const PICK_TIME := 15.0  # LAN: seconds to pick a pen before the host picks one
+const SNAP_EVERY := 1.0 / 15.0  # LAN Real-time: seconds between snapshots
+const BUFFER := 0.1  # LAN Real-time: guests draw this far behind the newest snapshot
+const SNAP_PEN := 5  # floats per pen in a snapshot: x, y, angle, fall, cooldown
 
 var variant := "turns"
 var rounds := 1
-## Seat type per seat: "human", "bot", "off". Set before adding to tree.
+## Seat type per seat: "human", "bot", "off", or "remote" (played on another phone).
+## Set before adding to tree. For LAN games set `owners` instead.
 var seats := ["human", "off", "bot", "off"]
+## LAN only: peer id per seat, 0 = bot (run by host), -1 = off. Empty = offline.
+var owners := []
 var names := []
 var avatars := []
 var me := -1
 
-var state: Dictionary  # the whole game, kept by this phone
+var state: Dictionary  # the whole game, kept by the host (offline: this phone)
 var view: Dictionary  # what the screen shows: the state as of the last finished animation
 var busy := false
-var pending := []  # [event, state after it] waiting to be animated
+var waiting_host := false
+var pending := []  # [event, state after it] waiting to be shown
 var table := Node2D.new()  # shaken on hard hits
 var desk := Desk.new()
 var hud := Control.new()
@@ -60,12 +77,15 @@ var hint := Label.new()
 var status := Label.new()
 var _results: Control
 var _pick: Control
+var _pick_seat := -1  # whose pick the overlay is for
+var _pick_until := 0  # msec: LAN pick deadline (as this phone sees it)
 var _turn_seen := -1
 var _oy := 0.0
 var _aiming := false
 var _press := Vector2.ZERO  # screen point where the aim started
 var _grab := 0.0  # -1..1 along the pen
 var _pull := Vector2.ZERO
+var _synced := []  # host: peers whose table is ready for events
 # flick playback
 var _ev := {}
 var _after := {}
@@ -79,14 +99,27 @@ var _clock_tw: Tween
 var _shaken := false
 # real-time
 var _live := false
-var _paused := false  # the leave dialog is open
+var _paused := false  # the leave dialog is open (offline only: a LAN game can't wait)
 var _settle := 0.0
 var _fingers := {}  # finger index (-1 = mouse) -> {seat, grab, press, pull}
 var _bots := {}  # seat -> a bot getting ready to flick: {wake, cands, listed, i, best, score}
 var _ready_seen := {}  # seat -> its pen was ready last frame
+var _snap_clock := 0.0  # host: time since the last snapshot
+var _snap_seq := 0  # host: last snapshot sent; guest: last one taken
+var _snaps := []  # guest: [round time, PackedFloat32Array] newest last
+var _play_t := -1.0  # guest: the round time being drawn
+var _sent_at := {}  # guest: seat -> msec its last flick went to the host
 
 
 func _ready() -> void:
+	if not owners.is_empty():
+		var my_id := multiplayer.get_unique_id()
+		me = owners.find(my_id)
+		for c in 4:
+			var o: int = owners[c]
+			seats[c] = "off" if o == -1 else "human" if o == my_id else "bot" if o == 0 and multiplayer.is_server() else "remote"
+		multiplayer.peer_disconnected.connect(_on_peer_left)
+		multiplayer.server_disconnected.connect(_on_host_left)
 	var colors := []
 	for c in 4:
 		if seats[c] != "off":
@@ -100,17 +133,28 @@ func _ready() -> void:
 		avatars = [{}, {}, {}, {}]
 		if me != -1:
 			avatars[me] = UI.avatar
-	state = Rules.new_state(variant, rounds, colors)
-	for c in colors:
-		if seats[c] == "bot":
-			Rules.pick(state, c, Physics.TYPES.pick_random())
-	view = state.duplicate(true)
+	var start := Rules.new_state(variant, rounds, colors)
+	view = start.duplicate(true)  # a guest's stand-in until the host's state arrives
 	_build(colors)
 	set_process(false)
-	if view.phase != "pick":  # all bots: straight into round 1
-		_round_start()
-	_refresh()
-	_next()
+	_pick_until = Time.get_ticks_msec() + int(PICK_TIME * 1000 / Engine.time_scale)
+	if multiplayer.is_server():
+		state = start
+		for c in colors:
+			if _is_bot(c):
+				Rules.pick(state, c, Physics.TYPES.pick_random())
+		view = state.duplicate(true)
+		if not owners.is_empty():
+			get_tree().create_timer(PICK_TIME).timeout.connect(_pick_time_up)
+		if view.phase != "pick":  # all bots: straight into round 1
+			_round_start()
+		_refresh()
+		_next()
+	else:
+		waiting_host = true
+		_refresh()
+		hint.text = "Joining the table..."
+		_hello.rpc_id(1)  # the host may have started already; it answers with the current state
 
 
 func _build(colors: Array) -> void:
@@ -162,13 +206,18 @@ func _build(colors: Array) -> void:
 
 
 ## Where a player `rel` places round the desk from you sits: 2 players face each other,
-## 3 sit in a triangle, 4 in a square.
+## 3 sit in a triangle, 4 in a square. Over LAN the order is the same on every phone, turned so
+## each phone's own pen is at the bottom of its portraits.
 static func _side(rel: int, n: int) -> String:
 	if n == 2:
 		return "across"
 	if n == 3:
 		return ["", "right", "left"][rel]
 	return ["", "right", "across", "left"][rel]
+
+
+func _is_bot(c: int) -> bool:
+	return seats[c] == "bot"
 
 
 func _to_menu() -> void:
@@ -179,8 +228,8 @@ func on_back() -> void:
 	if view.phase == "over":
 		_to_menu()
 		return
-	_paused = true
-	var leave: bool = await UI.confirm("Leave game?", "Your progress will be lost.")
+	_paused = owners.is_empty()
+	var leave: bool = await UI.confirm("Leave game?", "Your progress will be lost." if owners.is_empty() else "You will leave the room.")
 	_paused = false
 	if leave:
 		_to_menu()
@@ -219,7 +268,7 @@ func _controls() -> void:
 		"over":
 			hint.text = "Game over"
 		"pick":
-			hint.text = "Pick your pens"
+			hint.text = "Waiting for the others to pick..." if _pick == null and not owners.is_empty() else "Pick your pens"
 		"round_over":
 			hint.text = ""
 		"live":
@@ -230,18 +279,27 @@ func _controls() -> void:
 				hint.text = "Your turn! Pull back from your pen" if seats.count("human") == 1 else "%s's turn!" % names[c]
 			elif seats[c] == "human":
 				hint.text = ""
+			elif seats[c] == "remote" and owners[c] != 0:
+				hint.text = "Waiting for %s..." % names[c]
 			else:
 				hint.text = "%s is thinking..." % names[c]
 
 
 func _my_turn() -> bool:
 	return (not view.is_empty() and view.phase == "aim" and seats[view.turn] == "human"
-		and not busy and pending.is_empty() and _results == null and _pick == null)
+		and not busy and not waiting_host and pending.is_empty() and _results == null and _pick == null)
 
 
 func _next() -> void:
 	if not pending.is_empty():
-		_animate.callv(pending.pop_front())
+		var p: Array = pending.pop_front()
+		match p[0].get("type", "flick"):
+			"flick":
+				_animate(p[0], p[1])
+			"live_over":
+				_live_over(p[1])
+			_:  # "state" (picks) or "round" (a new round)
+				_catch_up(p[0], p[1])
 		return
 	match view.phase:
 		"over":
@@ -269,28 +327,70 @@ func _next() -> void:
 	_turn_seen = c
 	if who == "bot":
 		_bot_turn(c)
-	elif _clock_on():
+	elif _clock_on() and (who == "human" or owners[c] != 0):
 		_start_clock(c)
+
+
+## The host moved the game on without a flick (a pen was picked, a new round began): show it.
+func _catch_up(ev: Dictionary, after: Dictionary) -> void:
+	var was: String = view.phase
+	view = after
+	if _pick != null and view.pens.has(_pick_seat):  # picked for us (time ran out)
+		_pick.queue_free()
+		_pick = null
+	if ev.type == "round" or (was == "pick" and view.phase != "pick"):
+		_round_start()
+	_refresh()
+	_next()
+
+
+## Host: sends an event (and the state after it) to every phone, this one included.
+func _broadcast(ev: Dictionary, after: Dictionary) -> void:
+	var light := ev.duplicate()
+	light.erase("sim")  # guests replay flicks themselves
+	for peer in _synced:
+		_show.rpc_id(peer, light, after)
+	_show(ev, after)
 
 
 # --- pen pick -------------------------------------------------------------------
 
-## The next person without a pen picks one on the card overlay.
+## The next person on this phone without a pen picks one on the card overlay.
 func _next_pick() -> void:
+	_refresh()
+	if _pick != null:
+		return
 	var c := -1
 	for d in view.colors:
-		if not view.pens.has(d):
+		if seats[d] == "human" and not view.pens.has(d):
 			c = d
 			break
-	if c == -1:
+	if c == -1 or waiting_host:
 		return
-	_refresh()
+	_pick_seat = c
 	_pick = PenPick.new()
-	_pick.title = "Pick your pen" if seats.count("human") == 1 else "%s, pick your pen" % names[c]
+	_pick.title = _pick_title()
 	_pick.color = UI.COLORS[c]
 	_pick.chosen = UI.settings.get_value("penfight", "pen", "") if c == me else ""
 	_pick.picked.connect(_picked.bind(c))
 	hud.add_child(_pick)
+	_controls()
+	if not owners.is_empty():
+		_count_down()
+
+
+func _pick_title() -> String:
+	var who := "Pick your pen" if seats.count("human") == 1 else "%s, pick your pen" % names[_pick_seat]
+	if owners.is_empty():
+		return who
+	return "%s  (%d)" % [who, maxi(0, ceili((_pick_until - Time.get_ticks_msec()) / 1000.0 * Engine.time_scale))]
+
+
+## LAN: the pick overlay counts down the seconds left.
+func _count_down() -> void:
+	while _pick != null and is_inside_tree():
+		_pick.set_title(_pick_title())
+		await get_tree().create_timer(0.25).timeout
 
 
 func _picked(type: String, c: int) -> void:
@@ -299,12 +399,40 @@ func _picked(type: String, c: int) -> void:
 		UI.settings.save(UI.SETTINGS_PATH)
 	_pick.queue_free()
 	_pick = null
-	if not Rules.pick(state, c, type):
+	if multiplayer.is_server():
+		_host_pick(c, type, 0)
+	else:
+		waiting_host = true
+		_pick_request.rpc_id(1, type)
+	_controls()
+
+
+@rpc("any_peer", "reliable")
+func _pick_request(type: String) -> void:
+	if multiplayer.is_server():
+		var sender := multiplayer.get_remote_sender_id()
+		_host_pick(owners.find(sender), type, sender)
+
+
+## Host: seat c picks a pen. sender 0 = this phone; else that peer must own seat c.
+func _host_pick(c: int, type: String, sender: int) -> void:
+	if c == -1 or (sender != 0 and owners[c] != sender) or state.pens.has(c):
 		return
-	view = state.duplicate(true)
-	if view.phase != "pick":
-		_round_start()
-	_next()
+	if not Rules.pick(state, c, type):
+		if sender != 0:
+			_rejected.rpc_id(sender)
+		return
+	_broadcast({"type": "state"}, state.duplicate(true))
+
+
+## Host, LAN: anyone still choosing gets a pen at random.
+func _pick_time_up() -> void:
+	if not is_inside_tree() or state.phase != "pick":
+		return
+	for c in state.colors:
+		if not state.pens.has(c):
+			Rules.pick(state, c, Physics.TYPES.pick_random())
+	_broadcast({"type": "state"}, state.duplicate(true))
 
 
 ## Pens drop onto the desk with a "Round N" stamp.
@@ -315,27 +443,32 @@ func _round_start() -> void:
 	_turn_seen = -1
 
 
-## Between rounds: put the pens back and go again.
+## Between rounds: the host puts the pens back and everyone goes again.
 func _round_break() -> void:
-	busy = true
 	_refresh()
+	if not multiplayer.is_server():
+		return  # the host sends the new round
+	busy = true
 	await get_tree().create_timer(1.6).timeout
 	if not is_inside_tree():
 		return
 	Rules.next_round(state)
-	view = state.duplicate(true)
 	busy = false
-	_round_start()
-	_next()
+	_broadcast({"type": "round"}, state.duplicate(true))
 
 
 # --- turns ----------------------------------------------------------------------
 
-## The shot clock runs only when other people are waiting (pass and play), not vs bots.
+## The shot clock runs only when other people are waiting (pass and play, LAN), not vs bots.
 func _clock_on() -> bool:
-	return seats.count("human") > 1
+	var people := 0
+	for c in 4:
+		if seats[c] == "human" or (seats[c] == "remote" and owners[c] != 0):
+			people += 1
+	return people > 1
 
 
+## A ring round the flicker's portrait runs down; on this phone's own seat, time up flicks weakly.
 func _start_clock(c: int) -> void:
 	_stop_clock()
 	var seat: Seat = players[c]
@@ -397,24 +530,98 @@ func _bot_turn(c: int) -> void:
 		_intent(f, c)
 
 
-## The local player or a bot flicks. This phone keeps the state and decides.
+## The local player or a bot flicks. The host (or an offline phone) decides; guests ask the host.
 func _intent(f: Dictionary, c: int) -> void:
 	_stop_clock()
-	_host_do(f, c)
+	if multiplayer.is_server():
+		_host_do(f, c, 0)
+	else:
+		waiting_host = true
+		_controls()
+		_request.rpc_id(1, f)
 
 
-func _host_do(f: Dictionary, c: int) -> void:
+@rpc("any_peer", "reliable")
+func _request(f: Dictionary) -> void:
+	if multiplayer.is_server():
+		var sender := multiplayer.get_remote_sender_id()
+		_host_do(f, owners.find(sender), sender)
+
+
+## Host runs the flick. sender 0 = this phone; else that peer must own seat c.
+func _host_do(f, c: int, sender: int) -> void:
+	if c == -1 or (sender != 0 and owners[c] != sender):
+		return
 	var ev := Rules.flick(state, c, f)
 	if ev.is_empty():
-		_controls()
+		if sender != 0:
+			_rejected.rpc_id(sender)
+		else:
+			_controls()
 		return
-	_show(ev, state.duplicate(true))
+	_broadcast(ev, state.duplicate(true))
 
 
+## A guest's table is ready: send it the game as it stands.
+@rpc("any_peer", "reliable")
+func _hello() -> void:
+	var peer := multiplayer.get_remote_sender_id()
+	if multiplayer.is_server() and owners.has(peer) and not peer in _synced:
+		_synced.append(peer)
+		_sync_state.rpc_id(peer, state)
+
+
+@rpc("authority", "reliable")
+func _sync_state(s: Dictionary) -> void:
+	var was: String = view.phase
+	view = s
+	waiting_host = false
+	if was == "pick" and view.phase != "pick":
+		_round_start()
+	if not busy:
+		_next()
+
+
+## The host turned our flick or pick down (the turn moved on, ...): let the player try again.
+@rpc("authority", "reliable")
+func _rejected() -> void:
+	waiting_host = false
+	if not busy:
+		_next()
+
+
+@rpc("authority", "reliable")
 func _show(ev: Dictionary, after: Dictionary) -> void:
+	waiting_host = false
 	pending.append([ev, after])
 	if not busy:
 		_next()
+
+
+func _on_peer_left(id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_synced.erase(id)
+	for c in 4:
+		if owners[c] == id:
+			owners[c] = 0
+			seats[c] = "bot"
+			if state.phase == "pick" and not state.pens.has(c):
+				_host_pick(c, Physics.TYPES.pick_random(), 0)
+	if not busy and pending.is_empty() and view.phase == "aim":
+		_next()
+
+
+func _on_host_left() -> void:
+	_stop_clock()
+	busy = true
+	_live = false
+	_settle = 0.0
+	set_process(false)
+	hint.text = "Host left the game"
+	if _pick != null:
+		_pick.queue_free()
+		_pick = null
 
 
 # --- input ----------------------------------------------------------------------
@@ -492,6 +699,10 @@ func _animate(ev: Dictionary, after: Dictionary) -> void:
 	busy = true
 	_stop_clock()
 	_controls()
+	if not ev.has("sim"):  # from the host: replay it here
+		var fl: Dictionary = ev.flick.duplicate()
+		fl.id = ev.seat
+		ev.sim = Physics.simulate(view.world, [fl])
 	_ev = ev
 	_after = after
 	_frames = ev.sim.frames
@@ -618,31 +829,41 @@ func _go_live() -> void:
 	busy = true
 	_refresh()
 	await get_tree().create_timer(0.7).timeout
-	if not is_inside_tree():
+	if not is_inside_tree() or view.phase != "live":
 		return
 	busy = false
 	_bots = {}
 	_ready_seen = {}
+	_snaps = []
+	_play_t = -1.0
+	_snap_clock = SNAP_EVERY
 	_clock = 0.0
 	_last_clack = -1.0
 	_live = true
 	set_process(true)
 
 
-## Steps the round by delta (in slices, so bots and events keep up when the frame was long),
-## then redraws the pens, their cooldown rings and the aims.
+## Host: steps the round by delta (in slices, so bots and events keep up when the frame was
+## long), sends guests what changed, then redraws the pens, their cooldown rings and the aims.
+## Guests draw from the host's snapshots instead.
 func _live_tick(delta: float) -> void:
 	if _paused:
+		return
+	if not multiplayer.is_server():
+		_guest_tick(delta)
 		return
 	if not _live:  # the round is decided: let the last pens finish tipping off
 		Physics.step(state.world, delta)
 		desk.pens = state.world.pens
+		_send_snap(delta)
 		_settle -= delta
 		if _settle <= 0.0:
+			_settle = 0.0
 			set_process(false)
-			_live_over()
+			_broadcast({"type": "live_over"}, state.duplicate(true))
 		return
 	var left := delta
+	var news := {"events": [], "out": [], "knocks": [], "self_outs": []}  # for the guests
 	while left > 0.0 and _live:
 		var dt := minf(left, LIVE_STEP)
 		left -= dt
@@ -651,30 +872,132 @@ func _live_tick(delta: float) -> void:
 		var ev := Rules.live_step(state, dt)
 		for e in ev.events:
 			_play_event(e)
+			news.events.append(e)
 		if not ev.out.is_empty():
 			_live_outs(ev)
+			for k in ["out", "knocks", "self_outs"]:
+				news[k].append_array(ev[k])
 		if ev.round_winner != -1:
 			_live = false
 			_settle = SETTLE
 			_fingers = {}
 			desk.aims = {}
 			desk.cooldowns = {}
-	view = state  # offline this phone is the host: the screen follows the live state
+	if not news.events.is_empty() or not news.out.is_empty():
+		for peer in _synced:
+			_live_news.rpc_id(peer, news)
+	_send_snap(delta)
+	view = state  # this phone is the host: the screen follows the live state
 	desk.pens = state.world.pens
 	for c in state.colors:
-		var is_ready := Rules.ready(state, c)
-		desk.cooldowns[c] = clampf((state.ready_at[c] - state.time) / Rules.COOLDOWN, 0.0, 1.0) if _live else 0.0
-		if is_ready and not _ready_seen.get(c, true):
-			desk.pulses[c] = 0.0
-			if seats[c] == "human":
-				Input.vibrate_handheld(15)
-		_ready_seen[c] = is_ready
+		var cool := clampf((state.ready_at[c] - state.time) / Rules.COOLDOWN, 0.0, 1.0) if _live else 0.0
+		_show_cooldown(c, cool, Rules.ready(state, c))
+	_age_pulses(delta)
+	for i in _fingers:
+		_update_finger(i)
+
+
+func _show_cooldown(c: int, cool: float, is_ready: bool) -> void:
+	desk.cooldowns[c] = cool
+	if is_ready and not _ready_seen.get(c, true):
+		desk.pulses[c] = 0.0
+		if seats[c] == "human":
+			Input.vibrate_handheld(15)
+	_ready_seen[c] = is_ready
+
+
+func _age_pulses(delta: float) -> void:
 	for c in desk.pulses.keys():
 		desk.pulses[c] += delta / PULSE_TIME
 		if desk.pulses[c] >= 1.0:
 			desk.pulses.erase(c)
+
+
+## Host: every SNAP_EVERY, the desk as it is now to every guest: [round, time, then per pen
+## x, y, angle, fall, cooldown].
+func _send_snap(delta: float) -> void:
+	_snap_clock += delta
+	if _synced.is_empty() or _snap_clock < SNAP_EVERY:
+		return
+	_snap_clock = 0.0
+	var pens: Array = state.world.pens
+	var data := PackedFloat32Array()
+	data.resize(2 + pens.size() * SNAP_PEN)
+	data[0] = state.round
+	data[1] = state.time
+	for k in pens.size():
+		var p: Dictionary = pens[k]
+		var o := 2 + k * SNAP_PEN
+		data[o] = p.x
+		data[o + 1] = p.y
+		data[o + 2] = p.angle
+		data[o + 3] = p.fall
+		data[o + 4] = clampf((state.ready_at[p.id] - state.time) / Rules.COOLDOWN, 0.0, 1.0) if _live and not p.out else 0.0
+	_snap_seq += 1
+	for peer in _synced:
+		_snap.rpc_id(peer, _snap_seq, data)
+
+
+@rpc("authority", "unreliable_ordered")
+func _snap(seq: int, data: PackedFloat32Array) -> void:
+	if seq <= _snap_seq or data.size() != 2 + view.world.pens.size() * SNAP_PEN or int(data[0]) != view.round:
+		return  # old, or from another round
+	_snap_seq = seq
+	_snaps.append([data[1], data])
+	while _snaps.size() > 20:
+		_snaps.pop_front()
+
+
+## Guest: draws the desk BUFFER behind the newest snapshot, between the two around that moment.
+func _guest_tick(delta: float) -> void:
+	_clock += delta
+	if _snaps.is_empty():
+		return
+	var newest: float = _snaps.back()[0] - BUFFER
+	if _play_t < 0.0 or absf(_play_t - newest) > 0.3:
+		_play_t = newest  # first snapshot, or fell too far behind: jump
+	else:
+		_play_t += delta + (newest - _play_t) * 0.1  # drift gently toward the target
+	var a: Array = _snaps[0]
+	var b: Array = _snaps[0]
+	for s in _snaps:
+		if s[0] <= _play_t:
+			a = s
+		b = s
+		if s[0] >= _play_t:
+			break
+	var span: float = b[0] - a[0]
+	var t := clampf((_play_t - a[0]) / span, 0.0, 1.0) if span > 0.0 else 1.0
+	var da: PackedFloat32Array = a[1]
+	var db: PackedFloat32Array = b[1]
+	var pens: Array = view.world.pens
+	for k in pens.size():
+		var p: Dictionary = pens[k]
+		var o := 2 + k * SNAP_PEN
+		p.x = lerpf(da[o], db[o], t)
+		p.y = lerpf(da[o + 1], db[o + 1], t)
+		p.angle = lerp_angle(da[o + 2], db[o + 2], t)
+		p.fall = lerpf(da[o + 3], db[o + 3], t)
+		p.out = p.fall > 0.0 or p.out
+		var cool: float = db[o + 4]
+		_show_cooldown(p.id, cool, cool <= 0.0 and not p.out and _live)
+	desk.pens = pens
+	_age_pulses(delta)
 	for i in _fingers:
 		_update_finger(i)
+
+
+## Guest: what happened on the host's desk since its last batch.
+@rpc("authority", "reliable")
+func _live_news(news: Dictionary) -> void:
+	if not _live and _settle <= 0.0 and view.phase != "live":
+		return
+	for e in news.events:
+		_play_event(e)
+	if not news.out.is_empty():
+		for id in news.out:
+			Rules.pen_of(view, id).out = true
+		_live_outs(news)
 
 
 func _live_outs(ev: Dictionary) -> void:
@@ -684,15 +1007,23 @@ func _live_outs(ev: Dictionary) -> void:
 		Sfx.play("no_move", 0.0)
 		_popup("Oops!", UI.COLORS[c])
 	for i in _fingers.keys():  # a finger on a pen that just went over lets go
-		if Rules.pen_of(state, _fingers[i].seat).out:
+		if Rules.pen_of(view, _fingers[i].seat).out:
 			_fingers.erase(i)
 			desk.aims.erase(i)
 
 
-## The last pens have dropped: stamp the round, then on to the next one (or the results).
-func _live_over() -> void:
+## The round is decided and the last pens have dropped: stamp it, then on to the next one (or the
+## results).
+func _live_over(after: Dictionary) -> void:
 	busy = true
-	view = state.duplicate(true)
+	_live = false
+	_settle = 0.0
+	set_process(false)
+	_fingers = {}
+	desk.aims = {}
+	desk.cooldowns = {}
+	desk.pulses = {}
+	view = after
 	_refresh()
 	_round_won(view.round_winner)
 	await get_tree().create_timer(1.2).timeout
@@ -708,7 +1039,7 @@ func _live_over() -> void:
 ## per slice and flick the best.
 func _bots_tick() -> void:
 	for c in state.colors:
-		if seats[c] != "bot" or not Rules.ready(state, c):
+		if not _is_bot(c) or not Rules.ready(state, c):
 			_bots.erase(c)
 			continue
 		if not _bots.has(c):
@@ -738,6 +1069,40 @@ func _flicked(c: int) -> void:
 	_ready_seen[c] = false
 
 
+## Whether seat c (on this phone) may flick now. Guests go by the host's last snapshot.
+func can_flick(c: int) -> bool:
+	if not _live:
+		return false
+	if multiplayer.is_server():
+		return Rules.ready(state, c)
+	return (desk.cooldowns.get(c, 1.0) <= 0.0 and not Rules.pen_of(view, c).get("out", true)
+		and Time.get_ticks_msec() - _sent_at.get(c, -100000) > 400)
+
+
+## Seat c flicks now: the host applies it, a guest sends it (and shows it went).
+func live_flick(c: int, f: Dictionary) -> void:
+	if not can_flick(c):
+		Sfx.play("no_move", 0.0)  # still cooling down
+		return
+	if multiplayer.is_server():
+		if not Rules.live_flick(state, c, f).is_empty():
+			_flicked(c)
+		return
+	_sent_at[c] = Time.get_ticks_msec()
+	_flicked(c)
+	desk.cooldowns[c] = 1.0
+	_live_request.rpc_id(1, f)
+
+
+@rpc("any_peer", "reliable")
+func _live_request(f: Dictionary) -> void:
+	if not multiplayer.is_server() or not _live:
+		return
+	var c := owners.find(multiplayer.get_remote_sender_id())
+	if c != -1 and not Rules.live_flick(state, c, f).is_empty():
+		_flicked(c)
+
+
 ## Real-time input: every finger (and a real mouse) aims on its own.
 func _live_input(e: InputEvent) -> void:
 	if not _live or _paused or _results != null:
@@ -765,10 +1130,10 @@ func _finger_down(i: int, at: Vector2) -> void:
 	var best := -1
 	var best_d := INF
 	var grab := 0.0
-	for c in state.colors:
+	for c in view.colors:
 		if seats[c] != "human" or c in held:
 			continue
-		var pen := Rules.pen_of(state, c)
+		var pen := Rules.pen_of(view, c)
 		if pen.out:
 			continue
 		var g := _grab_at(pen, p)
@@ -799,7 +1164,7 @@ func _update_finger(i: int) -> void:
 	if f.is_empty():
 		desk.aims.erase(i)
 	else:
-		desk.aims[i] = _aim_view(Rules.pen_of(state, _fingers[i].seat), f.grab, Vector2.from_angle(f.angle), f.power)
+		desk.aims[i] = _aim_view(Rules.pen_of(view, _fingers[i].seat), f.grab, Vector2.from_angle(f.angle), f.power)
 	desk.queue_redraw()
 
 
@@ -811,12 +1176,8 @@ func _finger_up(i: int) -> void:
 	desk.aims.erase(i)
 	get_viewport().set_input_as_handled()
 	var f := _finger_flick(finger)
-	if f.is_empty():
-		return
-	if Rules.live_flick(state, finger.seat, f).is_empty():
-		Sfx.play("no_move", 0.0)  # still cooling down
-	else:
-		_flicked(finger.seat)
+	if not f.is_empty():
+		live_flick(finger.seat, f)
 
 
 static func _finger_flick(finger: Dictionary) -> Dictionary:
@@ -847,6 +1208,25 @@ func _show_results() -> void:
 	for c in view.colors:
 		lines[c] = Rules.stats(view, c)
 	_results.stats = lines
-	_results.play_again.connect(UI.restart)
+	_results.can_restart = owners.is_empty() or multiplayer.is_server()
+	_results.play_again.connect(_play_again)
 	_results.home.connect(_to_menu)
 	hud.add_child(_results)
+
+
+func _play_again() -> void:
+	if owners.is_empty():
+		UI.restart()
+		return
+	var n := names.duplicate()
+	var a := avatars.duplicate()
+	for c in 4:
+		if owners[c] == 0:  # players who left are bots now
+			n[c] = Games.BOT_NAMES[c]
+			a[c] = {}
+	_restart.rpc(owners, n, a)
+
+
+@rpc("authority", "call_local", "reliable")
+func _restart(o: Array, n: Array, a: Array) -> void:
+	UI.restart({"owners": o, "names": n, "avatars": a})  # the variant and rounds carry over
