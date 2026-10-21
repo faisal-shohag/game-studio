@@ -12,20 +12,23 @@ const Ai = preload("res://games/cards/cards_ai.gd")
 const Card = preload("res://games/cards/card.gd")
 const Hand = preload("res://games/cards/hand.gd")
 const Table = preload("res://games/cards/cards_table.gd")
-const Fan = preload("res://games/cards/card_fan.gd")
-const PlayerPanel = preload("res://games/shared/player_panel.gd")
+const Seat = preload("res://games/cards/seat.gd")
 const WinOverlay = preload("res://games/shared/win_overlay.gd")
 const Fx = preload("res://games/shared/fx.gd")
 const Games = preload("res://core/games.gd")
 const PLACES := ["1st place", "2nd place", "3rd place"]
-const PANEL_SIZE := Vector2(400, 190)
-## Opponent card spots by how many opponents there are, in play order from your left.
-const SPOTS := {1: [Vector2(340, 230)], 2: [Vector2(30, 640), Vector2(650, 640)],
-	3: [Vector2(30, 640), Vector2(340, 230), Vector2(650, 640)]}
-const SPECTATOR_SPOT := Vector2(340, 1500)  # all-bot games: the bottom seat's card
-const TABLE_Y := 1050.0
-const HAND_Y := 1650.0
-const ROW_Y := 1345.0  # LAST CARD / PASS / CATCH buttons
+## Opponent portraits (top-left corner) and the way their fans point, by how many opponents
+## there are, in play order from your left.
+const SPOTS := {
+	1: [[Vector2(465, 240), Vector2.DOWN]],
+	2: [[Vector2(170, 240), Vector2.DOWN], [Vector2(760, 240), Vector2.DOWN]],
+	3: [[Vector2(40, 520), Vector2.RIGHT], [Vector2(465, 140), Vector2.DOWN], [Vector2(890, 520), Vector2.LEFT]],
+}
+const MY_SPOT := Vector2(30, 1290)  # your portrait, bottom-left
+const TABLE_Y := 1000.0
+const HAND_Y := 1690.0
+const HAND_SCALE := 1.1
+const LAST_AT := Vector2(955, 1395)  # center of the round LAST CARD button
 
 ## Seat type per color: "human", "bot", "off", or "remote" (played on another phone).
 ## Set before adding to tree. For LAN games set `owners` instead.
@@ -45,13 +48,12 @@ var pending := []  # [event, view] pairs waiting to be animated
 var table_root := Node2D.new()  # piles + hand; shaken on +2/+4 hits
 var table := Table.new()
 var hand := Hand.new()
-var panels := {}  # color -> PlayerPanel
-var fans := {}  # color -> card fan under its panel
+var players := {}  # color -> Seat
 var hint := Label.new()
-var hud := Control.new()  # panels, buttons, hint, overlays
+var hud := Control.new()  # seats, buttons, hint, overlays
 var last_btn: Button
 var pass_btn: Button
-var catch_btn: Button
+var _last_pulse: Tween
 var plus4 := [0, 0, 0, 0]  # per color, for the results screen
 var _picker: Control  # wild color choice
 var _results: Control
@@ -95,7 +97,7 @@ func _ready() -> void:
 ## First view in hand: lay out the table and start the turn loop.
 func _begin(v: Dictionary) -> void:
 	view = v
-	_place_panels()
+	_place_seats()
 	if v.discard.size() == 1 and v.counts.values().all(func(n): return n == Rules.HAND):
 		busy = true  # events that arrive meanwhile wait in `pending`
 		await _deal()
@@ -114,8 +116,7 @@ func _deal() -> void:
 	table.set_discards([])
 	var mine := []
 	for c in colors:
-		fans[c].count = 0
-		panels[c].status = "0 cards"
+		players[c].count = 0
 	for k in Rules.HAND:
 		for i in colors.size():
 			var c: int = colors[(start + 1 + i) % colors.size()]  # dealer's left first
@@ -130,11 +131,10 @@ func _deal() -> void:
 				card.z_index = 10
 				table.add_child(card)
 				card.position = Table.PILE_AT
-				card.fly_to(table.to_local(_seat_pos(c)), randf_range(-0.4, 0.4), 0.3, 0.35)
+				card.fly_to(table.to_local(_seat_pos(c)), randf_range(-0.4, 0.4), 0.3, Seat.FAN_SCALE)
 				get_tree().create_timer(0.3).timeout.connect(func():
 					card.queue_free()
-					fans[c].count += 1
-					panels[c].status = "1 card" if fans[c].count == 1 else "%d cards" % fans[c].count)
+					players[c].count += 1)
 			await get_tree().create_timer(0.07).timeout
 	await get_tree().create_timer(0.4).timeout
 	var first := Card.new()
@@ -143,7 +143,7 @@ func _deal() -> void:
 	table.add_child(first)
 	first.position = Table.PILE_AT
 	first.flip(0.3)
-	await first.fly_to(Table.DISCARD_AT, table.tilt(first.id), 0.35, 1.0)
+	await first.fly_to(table.spot(first.id), table.tilt(first.id), 0.35, 1.0)
 	table.push(first)
 	table.pile_count = view.pile_count
 	Sfx.play("hop")
@@ -155,6 +155,7 @@ func _build(colors: Array) -> void:
 	table.position = Vector2(540, TABLE_Y + _oy)
 	table_root.add_child(table)
 	hand.position = Vector2(540, HAND_Y + _oy)
+	hand.scale = Vector2(HAND_SCALE, HAND_SCALE)
 	hand.picked.connect(_on_pick)
 	table_root.add_child(hand)
 	hud.theme = get_tree().root.theme  # themes don't flow through Node2D parents
@@ -163,24 +164,28 @@ func _build(colors: Array) -> void:
 	hud.z_index = 100  # above stacked and flying cards
 	add_child(hud)
 	for c in colors:
-		var panel := PlayerPanel.new()
-		panel.color = UI.COLORS[c]
-		panel.player_name = names[c]
-		panel.size = PANEL_SIZE
-		var fan := Fan.new()
-		fan.position = Vector2(PANEL_SIZE.x / 2, PANEL_SIZE.y + 30)
-		panel.add_child(fan)
-		hud.add_child(panel)
-		panels[c] = panel
-		fans[c] = fan
-	hint.position = Vector2(0, TABLE_Y + Table.RADIUS + 25 + _oy)
+		var seat := Seat.new()
+		seat.color = UI.COLORS[c]
+		seat.variant = c
+		seat.player_name = names[c]
+		seat.catch_pressed.connect(_on_catch)
+		hud.add_child(seat)
+		players[c] = seat
+	hint.position = Vector2(0, TABLE_Y + Table.RADIUS + 30 + _oy)
 	hint.size = Vector2(1080, 70)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 44)
 	hud.add_child(hint)
-	last_btn = _row_button("LAST CARD!", UI.COLORS[0], 30, func(): _intent({"do": "last"}, me))
-	pass_btn = _row_button("PASS", UI.ACCENT, 390, func(): _intent({"do": "pass"}, me))
-	catch_btn = _row_button("CATCH!", UI.COLORS[2], 750, _on_catch)
+	pass_btn = UI.button("PASS", UI.ACCENT, Vector2(240, 96), 44)
+	pass_btn.position = Vector2(420, 1382 + _oy)
+	pass_btn.pressed.connect(func(): if _my_turn(): _intent({"do": "pass"}, me))
+	pass_btn.hide()
+	hud.add_child(pass_btn)
+	last_btn = _round_button("LAST\nCARD!", UI.COLORS[0], 190)
+	last_btn.position = LAST_AT + Vector2(0, _oy) - last_btn.size / 2
+	last_btn.pressed.connect(func(): if _my_turn(): _intent({"do": "last"}, me))
+	last_btn.visible = me != -1
+	hud.add_child(last_btn)
 	var back := UI.button("", UI.INK.lightened(0.3), Vector2(120, 120))
 	var arrow := UI.icon("back", Color.WHITE, 100)
 	arrow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -191,12 +196,20 @@ func _build(colors: Array) -> void:
 	hud.add_child(back)
 
 
-func _row_button(text: String, color: Color, x: float, on_press: Callable) -> Button:
-	var b := UI.button(text, color, Vector2(300, 120), 44)
-	b.position = Vector2(x, ROW_Y + _oy)
-	b.pressed.connect(func(): if _my_turn() or b == catch_btn: on_press.call())
-	b.hide()
-	hud.add_child(b)
+## Big round chunky button (LAST CARD!): dim and inert until it can be used.
+func _round_button(text: String, color: Color, d: float) -> Button:
+	var b := UI.button(text, color, Vector2(d, d), 40)
+	b.size = Vector2(d, d)
+	for state_name in ["normal", "hover", "pressed", "disabled"]:
+		var s: StyleBoxFlat = b.get_theme_stylebox(state_name).duplicate()
+		s.set_corner_radius_all(int(d / 2))
+		s.border_color = UI.INK
+		s.set_border_width_all(6)
+		s.border_width_bottom = 4 if state_name == "pressed" else 14
+		if state_name == "disabled":
+			s.bg_color = color.darkened(0.45)
+		b.add_theme_stylebox_override(state_name, s)
+	b.add_theme_constant_override("line_spacing", -12)
 	return b
 
 
@@ -213,25 +226,25 @@ func on_back() -> void:
 		_to_menu()
 
 
-## Opponents sit around the bottom seat in play order: left, top, right.
-func _place_panels() -> void:
+## You sit bottom-left; opponents sit round the table in play order: left, top, right.
+func _place_seats() -> void:
 	var colors: Array = view.colors
 	var i := colors.find(_base)
 	var others := []
 	for k in range(1, colors.size()):
 		others.append(colors[(i + k) % colors.size()])
 	for k in others.size():
-		panels[others[k]].position = SPOTS[others.size()][k] + Vector2(0, _oy)
-		panels[others[k]].show()
-	panels[_base].visible = me == -1
-	panels[_base].position = SPECTATOR_SPOT + Vector2(0, _oy)
+		var spot: Array = SPOTS[others.size()][k]
+		players[others[k]].position = spot[0] + Vector2(0, _oy)
+		players[others[k]].facing = spot[1]
+	players[_base].position = MY_SPOT + Vector2(0, _oy)
+	players[_base].fan_visible = me == -1  # all-bot games: the bottom bot's hand shows as a fan
+	players[_base].facing = Vector2.RIGHT
 
 
 ## Where color c's cards come from and go to on screen.
 func _seat_pos(c: int) -> Vector2:
-	if c == _base and not panels[c].visible:
-		return hand.global_position
-	return panels[c].position + PANEL_SIZE / 2
+	return hand.global_position if c == me else players[c].fan_center()
 
 
 ## Redraws everything from `view` (no animation).
@@ -244,14 +257,12 @@ func _refresh() -> void:
 		table.set_discards(view.discard)
 	hand.set_cards(view.hand)
 	var over: bool = view.phase == "over"
-	for c in panels:
-		var panel: PlayerPanel = panels[c]
-		var n: int = view.counts[c]
-		panel.active = c == view.turn and not over
-		panel.status = "1 card" if n == 1 else "%d cards" % n
+	for c in players:
+		var seat: Seat = players[c]
+		seat.active = c == view.turn and not over
+		seat.count = view.counts[c]
 		var place: int = view.winners.find(c)
-		panel.note = PLACES[place] if place != -1 and place < PLACES.size() else ""
-		fans[c].count = n
+		seat.note = PLACES[place] if place != -1 and place < PLACES.size() else ""
 	_controls()
 
 
@@ -261,9 +272,17 @@ func _controls() -> void:
 	var acts := Rules.legal(view, view.hand) if mine else []
 	var ids := acts.filter(func(a): return a.do == "play").map(func(a): return a.id)
 	hand.mark(ids, mine)
-	last_btn.visible = acts.any(func(a): return a.do == "last")
+	var can_call := acts.any(func(a): return a.do == "last")
+	last_btn.disabled = not can_call
+	if can_call and _last_pulse == null:
+		_last_pulse = UI.pulse(last_btn)
+	elif not can_call and _last_pulse:
+		_last_pulse.kill()
+		_last_pulse = null
+		last_btn.scale = Vector2.ONE
 	pass_btn.visible = mine and view.phase == "drawn"
-	catch_btn.visible = view.phase != "over" and view.catchable not in [-1, me] and me != -1
+	for pc in players:
+		players[pc].show_catch(view.phase != "over" and view.catchable == pc and pc != me and me != -1)
 	var c: int = view.turn
 	if view.phase == "over":
 		hint.text = "%s wins!" % names[view.winners[0]]
@@ -304,7 +323,7 @@ func _next() -> void:
 		Input.vibrate_handheld(40)
 	_turn_seen = c
 	if who == "bot":
-		panels[c].note = "Thinking..."
+		players[c].note = "Thinking..."
 		await _pause(0.9 if view.catchable != -1 else 0.6)  # a beat to catch a forgetful player
 		if not is_inside_tree():
 			return
@@ -449,7 +468,7 @@ func _animate(ev: Dictionary, v: Dictionary) -> void:
 	_controls()
 	var c: int = ev.color
 	var col: Color = UI.COLORS[c]
-	panels[c].note = ""
+	players[c].note = ""
 	match ev.do:
 		"play":
 			await _fly_play(ev)
@@ -490,7 +509,7 @@ func _animate(ev: Dictionary, v: Dictionary) -> void:
 				if c == me:
 					_popup("No match", col)
 		"pass":
-			panels[c].note = "Pass"
+			players[c].note = "Pass"
 			Sfx.play("no_move", 0.0)
 		"last":
 			Sfx.play("home", 0.0)
@@ -504,7 +523,7 @@ func _animate(ev: Dictionary, v: Dictionary) -> void:
 	view = v
 	_refresh()
 	if ev.do == "draw" and not ev.can_play and not ev.stack:
-		panels[c].note = "No luck"
+		players[c].note = "No luck"
 	busy = false
 	_next()
 
@@ -520,10 +539,10 @@ func _fly_play(ev: Dictionary) -> void:
 		card.id = ev.id
 		table.add_child(card)
 		card.global_position = _seat_pos(ev.color)
-		card.scale = Vector2(0.4, 0.4)
+		card.scale = Vector2(Seat.FAN_SCALE, Seat.FAN_SCALE)
 		card.flip(0.3)
 	card.z_index = 10
-	await card.fly_to(Table.DISCARD_AT, table.tilt(ev.id), 0.35, 1.0)
+	await card.fly_to(table.spot(ev.id), table.tilt(ev.id), 0.35, 1.0)
 	table.push(card)
 
 
@@ -540,7 +559,7 @@ func _fly_draw(c: int, n: int, v: Dictionary) -> void:
 		table.add_child(card)
 		card.position = Table.PILE_AT
 		var to := table.to_local(_seat_pos(c))
-		card.fly_to(to, 0.0, 0.35, 0.35)
+		card.fly_to(to, 0.0, 0.35, Seat.FAN_SCALE)
 		get_tree().create_timer(0.36).timeout.connect(card.queue_free)
 		await get_tree().create_timer(0.08).timeout
 	await get_tree().create_timer(0.3).timeout
@@ -617,7 +636,7 @@ func _show_results() -> void:
 	if not is_inside_tree():  # left during the pause
 		return
 	hint.hide()
-	for b in [last_btn, pass_btn, catch_btn]:
+	for b in [last_btn, pass_btn]:
 		b.hide()
 	_results.ranking = Rules.ranking(view)
 	_results.names = names

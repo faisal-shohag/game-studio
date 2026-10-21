@@ -6,8 +6,8 @@ signal picked(id: int)
 
 const Card = preload("res://games/cards/card.gd")
 const Rules = preload("res://games/cards/cards_rules.gd")
-const WIDTH := 780.0  # spread of card centers at most
-const STEP := 140.0  # gap between card centers in a small hand
+const WIDTH := 720.0  # spread of card centers at most
+const STEP := 120.0  # gap between card centers in a small hand
 
 var cards := {}  # id -> Card
 var order := []  # ids, left to right
