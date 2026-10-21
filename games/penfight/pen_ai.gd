@@ -108,15 +108,24 @@ static func noisy(f: Dictionary) -> Dictionary:
 
 ## Real-time: a quick flick for seat c from the world as it is now (pens may still be moving).
 static func quick_pick(s: Dictionary, c: int) -> Dictionary:
-	var cands := candidates(s, c, QUICK + 2).slice(0, QUICK)
 	var best := {}
 	var best_score := -INF
-	for f in cands:
-		var fl: Dictionary = f.duplicate()
-		fl.id = c
-		var sim := Physics.simulate(s.world, [fl], false, QUICK_TIME)
-		var sc := score(c, sim.final, sim.fallen)
+	for f in quick_candidates(s, c):
+		var sc := quick_eval(s, c, f)
 		if sc > best_score:
 			best_score = sc
 			best = f
 	return noisy(best)
+
+
+## Real-time: the few flicks worth a short simulation.
+static func quick_candidates(s: Dictionary, c: int) -> Array:
+	return candidates(s, c, QUICK + 2).slice(0, QUICK)
+
+
+## Real-time: simulates the next QUICK_TIME seconds after the flick and scores them for seat c.
+static func quick_eval(s: Dictionary, c: int, f: Dictionary) -> float:
+	var fl := f.duplicate()
+	fl.id = c
+	var sim := Physics.simulate(s.world, [fl], false, QUICK_TIME)
+	return score(c, sim.final, sim.fallen)

@@ -28,6 +28,12 @@ var aim := {}:
 	set(v):
 		aim = v
 		queue_redraw()
+## Real-time: more aims at once, by finger (same shape as `aim`).
+var aims := {}
+## Real-time: pen id -> cooldown left 0..1 (0 = ready), drawn as a ring round the pen's middle.
+var cooldowns := {}
+## Real-time: pen id -> 0..1 age of the "ready" pulse.
+var pulses := {}
 var _grain := []  # [points, color, width]
 var _scratches := []  # [a, b, width]
 
@@ -70,8 +76,23 @@ func _draw() -> void:
 	for p in pens:
 		if p.fall <= 0.0:
 			_draw_one(p)
+			_draw_cooldown(p)
 	if not aim.is_empty():
-		_draw_aim()
+		_draw_aim(aim)
+	for a in aims.values():
+		_draw_aim(a)
+
+
+func _draw_cooldown(p: Dictionary) -> void:
+	var at := Vector2(p.x, p.y) - HALF
+	var col: Color = colors.get(p.id, Color.WHITE)
+	var left: float = cooldowns.get(p.id, 0.0)
+	if left > 0.0:
+		draw_arc(at, 30, 0, TAU, 32, Color(0, 0, 0, 0.35), 9.0, true)
+		draw_arc(at, 30, -PI / 2, -PI / 2 + TAU * (1.0 - left), 32, Color(col.lightened(0.3), 0.9), 7.0, true)
+	var pulse: float = pulses.get(p.id, 1.0)
+	if pulse < 1.0:
+		draw_arc(at, 30 + pulse * 60, 0, TAU, 40, Color(col.lightened(0.4), 1.0 - pulse), 8.0 * (1.0 - pulse) + 2.0, true)
 
 
 func _draw_one(p: Dictionary) -> void:
@@ -187,10 +208,10 @@ func _draw_doodles() -> void:
 
 ## Aim: an arrow from the grab point along the flick, a power ring round the grab point and a
 ## curved spin hint when grabbing near an end.
-func _draw_aim() -> void:
-	var at: Vector2 = aim.grab - HALF
-	var dir: Vector2 = aim.dir
-	var p: float = aim.power
+func _draw_aim(g: Dictionary) -> void:
+	var at: Vector2 = g.grab - HALF
+	var dir: Vector2 = g.dir
+	var p: float = g.power
 	var col := Color(1, 1, 1).lerp(Color("ffc312"), clampf(p * 1.6, 0, 1)).lerp(Color("ff4757"), clampf(p * 2.5 - 1.5, 0, 1))
 	var length := 90.0 + 330.0 * p
 	var tip := at + dir * length
@@ -207,9 +228,9 @@ func _draw_aim() -> void:
 	draw_arc(at, 34, 0, TAU, 40, Color(0, 0, 0, 0.3), 10.0, true)
 	draw_arc(at, 34, -PI / 2, -PI / 2 + TAU * p, 40, col, 10.0, true)
 	draw_circle(at, 8, col)
-	var spin: float = aim.get("spin", 0.0)
+	var spin: float = g.get("spin", 0.0)
 	if absf(spin) > 0.25:  # which way the pen will turn
-		var c: Vector2 = aim.get("center", aim.grab) - HALF
+		var c: Vector2 = g.get("center", g.grab) - HALF
 		var r := 70.0 + 40.0 * absf(spin)
 		var a0 := (at - c).angle()
 		var sweep := 1.6 * signf(spin)

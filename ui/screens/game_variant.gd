@@ -11,7 +11,6 @@ const INFO := {
 	"turns": [3, "TURNS", "Take turns. Knock them off!"],
 	"realtime": [0, "REAL-TIME", "No turns. Flick any time!"],
 }
-const SOON := ["realtime"]  # shown locked for now
 
 var game := "carrom"
 var mode := "bots"  # bots | local | lan
@@ -32,9 +31,7 @@ func build() -> void:
 			rounds = options[-1]
 	for v in Games.LIST[game].variants:
 		var info: Array = INFO[v]
-		var soon: bool = v in SOON
-		var t := UI.tile(UI.COLORS[info[0]], UI.icon(game, Color.WHITE, 200), info[1], "Coming soon" if soon else info[2], Vector2(940, 300), 80)
-		t.disabled = soon
+		var t := UI.tile(UI.COLORS[info[0]], UI.icon(game, Color.WHITE, 200), info[1], info[2], Vector2(940, 300), 80)
 		t.pressed.connect(_pick.bind(v))
 		content.add_child(t)
 	if not options.is_empty():

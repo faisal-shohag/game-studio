@@ -9,6 +9,11 @@
 ## anywhere on your pen (that is where the flick lands) and pull back. The arrow points the other
 ## way and a ring shows the power; grabbing near an end shows which way the pen will spin. Let go
 ## to flick, or let go near where you started to cancel.
+##
+## Real-time: no turns and no playback. The world steps live in _process, each pen flicks whenever
+## its cooldown ring has run out, and every finger aims on its own, so pass-and-play friends can
+## flick at once (a touch takes the nearest pen of a person on this phone). Bots wait a moment once
+## ready, then weigh a few short simulations, one per slice, and flick.
 extends Node2D
 
 const Rules = preload("res://games/penfight/pen_rules.gd")
@@ -31,6 +36,9 @@ const FULL_PULL := 340.0  # screen pull for full power
 const BOT_THINK := 0.6
 const SHOT_CLOCK := 20.0  # seconds a person gets when others are waiting; then a weak flick
 const HARD_HIT := 900.0  # a contact this fast shakes the desk
+const LIVE_STEP := 1.0 / 30.0  # Real-time: longest slice of time stepped at once
+const PULSE_TIME := 0.45  # Real-time: the "ready" pulse
+const SETTLE := 0.6  # Real-time: seconds pens keep tipping off after a round is decided
 
 var variant := "turns"
 var rounds := 1
@@ -69,6 +77,13 @@ var _done_events := 0
 var _last_clack := -1.0
 var _clock_tw: Tween
 var _shaken := false
+# real-time
+var _live := false
+var _paused := false  # the leave dialog is open
+var _settle := 0.0
+var _fingers := {}  # finger index (-1 = mouse) -> {seat, grab, press, pull}
+var _bots := {}  # seat -> a bot getting ready to flick: {wake, cands, listed, i, best, score}
+var _ready_seen := {}  # seat -> its pen was ready last frame
 
 
 func _ready() -> void:
@@ -163,7 +178,11 @@ func _to_menu() -> void:
 func on_back() -> void:
 	if view.phase == "over":
 		_to_menu()
-	elif await UI.confirm("Leave game?", "Your progress will be lost."):
+		return
+	_paused = true
+	var leave: bool = await UI.confirm("Leave game?", "Your progress will be lost.")
+	_paused = false
+	if leave:
 		_to_menu()
 
 
@@ -203,6 +222,9 @@ func _controls() -> void:
 			hint.text = "Pick your pens"
 		"round_over":
 			hint.text = ""
+		"live":
+			var people := seats.count("human")
+			hint.text = "" if people == 0 else "Flick any time!" if people == 1 else "Everyone flick!"
 		_:
 			if _my_turn():
 				hint.text = "Your turn! Pull back from your pen" if seats.count("human") == 1 else "%s's turn!" % names[c]
@@ -232,6 +254,9 @@ func _next() -> void:
 			return
 		"round_over":
 			_round_break()
+			return
+		"live":
+			_go_live()
 			return
 	var c: int = view.turn
 	var who: String = seats[c]
@@ -395,6 +420,9 @@ func _show(ev: Dictionary, after: Dictionary) -> void:
 # --- input ----------------------------------------------------------------------
 
 func _unhandled_input(e: InputEvent) -> void:
+	if variant == "realtime":
+		_live_input(e)
+		return
 	if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
 		var at := get_global_mouse_position()
 		if e.pressed:
@@ -470,6 +498,7 @@ func _animate(ev: Dictionary, after: Dictionary) -> void:
 	_ids = view.world.pens.map(func(p): return p.id)
 	_types = view.world.pens.map(func(p): return p.type)
 	_clock = 0.0
+	_last_clack = -1.0
 	_done_events = 0
 	_shaken = false
 	for c in players:
@@ -479,6 +508,9 @@ func _animate(ev: Dictionary, after: Dictionary) -> void:
 
 
 func _process(delta: float) -> void:
+	if _live or _settle > 0.0:
+		_live_tick(delta)
+		return
 	_clock += delta
 	var fi := mini(int(_clock * 60.0), _frames.size() - 1)
 	var f: PackedFloat32Array = _frames[fi]
@@ -532,28 +564,17 @@ func _shot_over() -> void:
 	_refresh()
 	var wait := 0.25
 	if not ev.knocks.is_empty():
-		var by := {}  # knocker -> names knocked off
-		for k in ev.knocks:
-			if not by.has(k[0]):
-				by[k[0]] = []
-			by[k[0]].append(names[k[1]])
-		for b in by:
-			_popup("%s knocked off %s!" % [names[b], " & ".join(by[b])], UI.COLORS[b], true)
+		_knock_popups(ev.knocks)
 		wait = 0.9
 	if c in ev.self_outs:
 		Sfx.play("no_move", 0.0)
 		_popup("Oops!", UI.COLORS[0])
 		wait = 0.9
 	if ev.round_winner != -1:
-		var w: int = ev.round_winner
 		await get_tree().create_timer(wait).timeout
 		if not is_inside_tree():
 			return
-		Sfx.play("home", 0.0)
-		var text := "%s wins!" % names[w] if view.rounds == 1 else "Round %d: %s wins!" % [view.round, names[w]]
-		Fx.popup(hud, text, UI.COLORS[w], DESK_AT.y + _oy, true)
-		Fx.burst(hud, players[w].position + Vector2(75, 75), UI.COLORS[w])
-		players[w].chip = "Round won!" if view.rounds > 1 else ""
+		_round_won(ev.round_winner)
 		wait = 1.2
 	await get_tree().create_timer(wait).timeout
 	if not is_inside_tree():
@@ -564,8 +585,246 @@ func _shot_over() -> void:
 	_next()
 
 
+## "Max knocked off Zoe & Leo!", one popup per knocker.
+func _knock_popups(knocks: Array) -> void:
+	var by := {}  # knocker -> names knocked off
+	for k in knocks:
+		if not by.has(k[0]):
+			by[k[0]] = []
+		by[k[0]].append(names[k[1]])
+	for b in by:
+		_popup("%s knocked off %s!" % [names[b], " & ".join(by[b])], UI.COLORS[b], true)
+
+
+## The round's stamp: "Round 1: Zoe wins!".
+func _round_won(w: int) -> void:
+	Sfx.play("home", 0.0)
+	var text := "%s wins!" % names[w] if view.rounds == 1 else "Round %d: %s wins!" % [view.round, names[w]]
+	Fx.popup(hud, text, UI.COLORS[w], DESK_AT.y + _oy, true)
+	Fx.burst(hud, players[w].position + Vector2(75, 75), UI.COLORS[w])
+	players[w].chip = "Round won!" if view.rounds > 1 else ""
+
+
 func _popup(text: String, color: Color, big := false) -> void:
 	Fx.popup(hud, text, color, DESK_AT.y + _oy - 260, big)
+
+
+# --- real-time ------------------------------------------------------------------
+
+## A round starts: a moment to see the desk, then everyone goes.
+func _go_live() -> void:
+	if _live or busy:
+		return
+	busy = true
+	_refresh()
+	await get_tree().create_timer(0.7).timeout
+	if not is_inside_tree():
+		return
+	busy = false
+	_bots = {}
+	_ready_seen = {}
+	_clock = 0.0
+	_last_clack = -1.0
+	_live = true
+	set_process(true)
+
+
+## Steps the round by delta (in slices, so bots and events keep up when the frame was long),
+## then redraws the pens, their cooldown rings and the aims.
+func _live_tick(delta: float) -> void:
+	if _paused:
+		return
+	if not _live:  # the round is decided: let the last pens finish tipping off
+		Physics.step(state.world, delta)
+		desk.pens = state.world.pens
+		_settle -= delta
+		if _settle <= 0.0:
+			set_process(false)
+			_live_over()
+		return
+	var left := delta
+	while left > 0.0 and _live:
+		var dt := minf(left, LIVE_STEP)
+		left -= dt
+		_clock += dt
+		_bots_tick()
+		var ev := Rules.live_step(state, dt)
+		for e in ev.events:
+			_play_event(e)
+		if not ev.out.is_empty():
+			_live_outs(ev)
+		if ev.round_winner != -1:
+			_live = false
+			_settle = SETTLE
+			_fingers = {}
+			desk.aims = {}
+			desk.cooldowns = {}
+	view = state  # offline this phone is the host: the screen follows the live state
+	desk.pens = state.world.pens
+	for c in state.colors:
+		var is_ready := Rules.ready(state, c)
+		desk.cooldowns[c] = clampf((state.ready_at[c] - state.time) / Rules.COOLDOWN, 0.0, 1.0) if _live else 0.0
+		if is_ready and not _ready_seen.get(c, true):
+			desk.pulses[c] = 0.0
+			if seats[c] == "human":
+				Input.vibrate_handheld(15)
+		_ready_seen[c] = is_ready
+	for c in desk.pulses.keys():
+		desk.pulses[c] += delta / PULSE_TIME
+		if desk.pulses[c] >= 1.0:
+			desk.pulses.erase(c)
+	for i in _fingers:
+		_update_finger(i)
+
+
+func _live_outs(ev: Dictionary) -> void:
+	_refresh()
+	_knock_popups(ev.knocks)
+	for c in ev.self_outs:
+		Sfx.play("no_move", 0.0)
+		_popup("Oops!", UI.COLORS[c])
+	for i in _fingers.keys():  # a finger on a pen that just went over lets go
+		if Rules.pen_of(state, _fingers[i].seat).out:
+			_fingers.erase(i)
+			desk.aims.erase(i)
+
+
+## The last pens have dropped: stamp the round, then on to the next one (or the results).
+func _live_over() -> void:
+	busy = true
+	view = state.duplicate(true)
+	_refresh()
+	_round_won(view.round_winner)
+	await get_tree().create_timer(1.2).timeout
+	if not is_inside_tree():
+		return
+	for k in players:
+		players[k].chip = ""
+	busy = false
+	_next()
+
+
+## Bots on cooldown wait; once ready they wait a human-ish moment, then weigh one candidate flick
+## per slice and flick the best.
+func _bots_tick() -> void:
+	for c in state.colors:
+		if seats[c] != "bot" or not Rules.ready(state, c):
+			_bots.erase(c)
+			continue
+		if not _bots.has(c):
+			_bots[c] = {"wake": state.time + randf_range(Ai.REACTION[0], Ai.REACTION[1]), "cands": [], "listed": false, "i": 0, "best": {}, "score": -INF}
+			continue
+		var job: Dictionary = _bots[c]
+		if state.time < job.wake:
+			continue
+		if not job.listed:
+			job.cands = Ai.quick_candidates(state, c)
+			job.listed = true
+		if job.i < job.cands.size():
+			var sc := Ai.quick_eval(state, c, job.cands[job.i])
+			if sc > job.score:
+				job.score = sc
+				job.best = job.cands[job.i]
+			job.i += 1
+			continue
+		_bots.erase(c)
+		if not Rules.live_flick(state, c, Ai.noisy(job.best)).is_empty():
+			_flicked(c)
+
+
+func _flicked(c: int) -> void:
+	Sfx.play("hop", 0.1, -6.0)
+	desk.pulses.erase(c)
+	_ready_seen[c] = false
+
+
+## Real-time input: every finger (and a real mouse) aims on its own.
+func _live_input(e: InputEvent) -> void:
+	if not _live or _paused or _results != null:
+		return
+	if e is InputEventScreenTouch:
+		if e.pressed:
+			_finger_down(e.index, e.position)
+		else:
+			_finger_up(e.index)
+	elif e is InputEventScreenDrag:
+		_finger_move(e.index, e.position)
+	elif e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT and e.device != InputEvent.DEVICE_ID_EMULATION:
+		if e.pressed:
+			_finger_down(-1, get_global_mouse_position())
+		else:
+			_finger_up(-1)
+	elif e is InputEventMouseMotion and e.device != InputEvent.DEVICE_ID_EMULATION:
+		_finger_move(-1, get_global_mouse_position())
+
+
+## A touch takes the nearest pen (of someone on this phone, not already held) within reach.
+func _finger_down(i: int, at: Vector2) -> void:
+	var p := desk.to_desk(at)
+	var held := _fingers.values().map(func(f): return f.seat)
+	var best := -1
+	var best_d := INF
+	var grab := 0.0
+	for c in state.colors:
+		if seats[c] != "human" or c in held:
+			continue
+		var pen := Rules.pen_of(state, c)
+		if pen.out:
+			continue
+		var g := _grab_at(pen, p)
+		if is_nan(g):
+			continue
+		var d := p.distance_to(Vector2(pen.x, pen.y))
+		if d < best_d:
+			best_d = d
+			best = c
+			grab = g
+	if best == -1:
+		return
+	_fingers[i] = {"seat": best, "grab": grab, "press": at, "pull": Vector2.ZERO}
+	get_viewport().set_input_as_handled()
+
+
+func _finger_move(i: int, at: Vector2) -> void:
+	if not _fingers.has(i):
+		return
+	_fingers[i].pull = at - _fingers[i].press
+	_update_finger(i)
+	get_viewport().set_input_as_handled()
+
+
+## Redraws a finger's aim on its pen (which may be moving).
+func _update_finger(i: int) -> void:
+	var f := _finger_flick(_fingers[i])
+	if f.is_empty():
+		desk.aims.erase(i)
+	else:
+		desk.aims[i] = _aim_view(Rules.pen_of(state, _fingers[i].seat), f.grab, Vector2.from_angle(f.angle), f.power)
+	desk.queue_redraw()
+
+
+func _finger_up(i: int) -> void:
+	if not _fingers.has(i):
+		return
+	var finger: Dictionary = _fingers[i]
+	_fingers.erase(i)
+	desk.aims.erase(i)
+	get_viewport().set_input_as_handled()
+	var f := _finger_flick(finger)
+	if f.is_empty():
+		return
+	if Rules.live_flick(state, finger.seat, f).is_empty():
+		Sfx.play("no_move", 0.0)  # still cooling down
+	else:
+		_flicked(finger.seat)
+
+
+static func _finger_flick(finger: Dictionary) -> Dictionary:
+	var pull: Vector2 = finger.pull
+	if pull.length() < CANCEL:
+		return {}
+	var power := clampf((pull.length() - CANCEL) / (FULL_PULL - CANCEL), Rules.MIN_POWER, 1.0)
+	return {"grab": finger.grab, "angle": (-pull).angle(), "power": power}
 
 
 # --- results --------------------------------------------------------------------

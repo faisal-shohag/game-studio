@@ -1,13 +1,13 @@
 ## Run: godot --headless --path . tests/run.tscn -- tests/smoke_penfight_game.gd
-## Plays a 4-bot Turns best-of-3 match and a 2-bot Turns single round through the real scene
-## (sped up) and checks both end.
+## Plays a 4-bot Turns best-of-3 match, a 2-bot Turns single round and a 4-bot Real-time best of 3
+## through the real scene (sped up) and checks each ends.
 extends Node
 
 
 func _ready() -> void:
-	Engine.time_scale = 50
 	var ok := true
-	for setup in [["turns", 3, ["bot", "bot", "bot", "bot"]], ["turns", 1, ["bot", "off", "bot", "off"]]]:
+	for setup in [["turns", 3, ["bot", "bot", "bot", "bot"]], ["turns", 1, ["bot", "off", "bot", "off"]], ["realtime", 3, ["bot", "bot", "bot", "bot"]]]:
+		Engine.time_scale = 50 if setup[0] == "turns" else 15  # Real-time steps every slice: keep frames short
 		ok = await _play(setup[0], setup[1], setup[2]) and ok
 	get_tree().quit(0 if ok else 1)
 
