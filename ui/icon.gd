@@ -52,6 +52,16 @@ func _draw() -> void:
 			var col: Color = UI.COLORS[avatar.face % 4] if avatar.has("face") else color
 			if not Avatar.draw(self, c, 92 * u, avatar, col, round, not sad):
 				PawnArt.draw(self, c + Vector2(0, 46) * u, u * 0.95, color)
+		"qr":  # three finder squares and a few modules
+			var s := 76 * u
+			var o := c - Vector2(s, s) / 2
+			var q := s / 7.0 * 2.6
+			for corner in [Vector2.ZERO, Vector2(s - q, 0), Vector2(0, s - q)]:
+				draw_rect(Rect2(o + corner, Vector2(q, q)), color)
+				draw_rect(Rect2(o + corner + Vector2(q, q) * 0.18, Vector2(q, q) * 0.64), disc if disc.a > 0 else ink)
+				draw_rect(Rect2(o + corner + Vector2(q, q) * 0.32, Vector2(q, q) * 0.36), color)
+			for d in [Vector2(0.62, 0.62), Vector2(0.84, 0.62), Vector2(0.62, 0.84), Vector2(0.84, 0.84), Vector2(0.45, 0.1), Vector2(0.1, 0.45), Vector2(0.73, 0.4)]:
+				draw_rect(Rect2(o + d * s, Vector2(s, s) * 0.12), color)
 		"camera":
 			var body := Rect2(c + Vector2(-38, -22) * u, Vector2(76, 52) * u)
 			draw_rect(Rect2(c + Vector2(-14, -32) * u, Vector2(28, 14) * u), color)

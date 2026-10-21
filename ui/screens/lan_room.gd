@@ -6,6 +6,8 @@ extends "res://ui/screen.gd"
 
 const Games = preload("res://core/games.gd")
 const Avatar = preload("res://core/avatar.gd")
+const QrCode = preload("res://ui/qr_code.gd")
+const QrScan = preload("res://core/qr_scan.gd")
 const PORT := 7790
 const DISCOVERY_PORT := 7791
 const HELLO := "GAMESTUDIO"  # broadcast: HELLO|game id|host name
@@ -37,7 +39,25 @@ func build() -> void:
 	status = UI.label("", 50)
 	content.add_child(status)
 	info = UI.label("", 36, Color(1, 1, 1, 0.75))
-	content.add_child(info)
+	if hosting:  # the QR friends scan, with the room details beside it
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 34)
+		var qr := QrCode.new()
+		qr.custom_minimum_size = Vector2(300, 300)
+		qr.text = QrScan.JOIN_PREFIX + ",".join(_lan_ips())
+		qr.visible = not _lan_ips().is_empty()
+		qr.tapped.connect(_show_big_qr.bind(qr.text))
+		row.add_child(qr)
+		var col := VBoxContainer.new()
+		col.alignment = BoxContainer.ALIGNMENT_CENTER
+		col.add_theme_constant_override("separation", 12)
+		col.add_child(UI.label("Scan to join" if qr.visible else "No Wi-Fi", 60, Color.WHITE, HORIZONTAL_ALIGNMENT_LEFT))
+		info.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		col.add_child(info)
+		row.add_child(col)
+		content.add_child(row)
+	else:
+		content.add_child(info)
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 30)
 	grid.add_theme_constant_override("v_separation", 30)
@@ -85,7 +105,8 @@ func build() -> void:
 		names[0] = UI.player_name
 		avatars[0] = UI.avatar
 		_status_text = "Waiting for friends"
-		info.text = "%s room  IP: %s\nTap an empty seat: Bot or Off" % [Games.LIST[game].name, ", ".join(_lan_ips())]
+		info.text = ("%s room\nIP %s\nTap an empty seat: Bot or Off" % [Games.LIST[game].name, ", ".join(_lan_ips())]
+			if not _lan_ips().is_empty() else "Turn on Wi-Fi or a hotspot\nso friends can join")
 		udp.set_broadcast_enabled(true)
 		udp.set_dest_address("255.255.255.255", DISCOVERY_PORT)
 	else:
@@ -96,6 +117,28 @@ func build() -> void:
 		multiplayer.multiplayer_peer = peer
 		_status_text = "Joining %s" % join_ip
 	_refresh()
+
+
+## The room QR, big over everything; a tap or back closes it.
+func _show_big_qr(text: String) -> void:
+	var layer := ColorRect.new()
+	layer.color = Color(0.05, 0.03, 0.15, 0.92)
+	layer.size = get_viewport_rect().size
+	var qr := QrCode.new()
+	qr.text = text
+	qr.size = Vector2(940, 940)
+	qr.position = (layer.size - qr.size) / 2 - Vector2(0, 60)
+	qr.mouse_filter = MOUSE_FILTER_IGNORE
+	layer.add_child(qr)
+	var hint := UI.label("Friends: JOIN ROOM > SCAN QR", 48)
+	hint.size = Vector2(layer.size.x, 80)
+	hint.position = Vector2(0, qr.position.y + qr.size.y + 40)
+	layer.add_child(hint)
+	layer.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.pressed:
+			layer.queue_free())
+	add_child(layer)
+	UI.overlay = layer  # Android back closes it
 
 
 func _lan_ips() -> Array:

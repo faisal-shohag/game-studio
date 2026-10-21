@@ -22,6 +22,8 @@ var history := []  # [what, props] of screens to return to
 var current: Node
 var current_entry := []
 var _dialog: CanvasLayer
+## A full-screen layer over the current screen (an enlarged picture...): back closes it first.
+var overlay: Node
 
 var player_name: String:
 	get:
@@ -117,6 +119,9 @@ func back_with(props: Dictionary) -> void:
 func back() -> void:
 	if _dialog:
 		_dialog_closed.emit(false)
+	elif is_instance_valid(overlay):
+		overlay.queue_free()
+		overlay = null
 	elif current and current.has_method("on_back"):
 		current.on_back()
 	elif history.is_empty():

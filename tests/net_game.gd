@@ -70,6 +70,8 @@ func _ready() -> void:
 		elif s.phase == "move" and game.Rules.legal_moves(s).size() > 1:  # Ludo only
 			game._intent("move", game.Rules.legal_moves(s).pick_random())
 	await get_tree().create_timer(20.0).timeout  # let client finish last animation
+	if hosting:
+		await get_tree().create_timer(20.0).timeout  # and print FINAL before Play Again replaces its game
 	print("FINAL ", _board(game))
 	if game_id == "cards" and not hosting:
 		print("SECRET ", "ok" if leaks.is_empty() else "LEAKED %s" % [leaks[0]])

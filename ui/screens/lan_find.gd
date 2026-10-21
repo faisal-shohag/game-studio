@@ -1,5 +1,5 @@
 ## Find a LAN room: radar while listening for host broadcasts, a card per room found,
-## or type the host's IP.
+## scan the host's QR code, or type the host's IP.
 extends "res://ui/screen.gd"
 
 const Room = preload("res://ui/screens/lan_room.gd")
@@ -10,6 +10,10 @@ var rooms := VBoxContainer.new()
 var found := {}  # ip -> card
 var manual := HBoxContainer.new()
 var ip_edit := LineEdit.new()
+## Set when coming back from the scanner: the host IP it read (joined right away), or a request
+## to open the typed-IP box.
+var scanned := ""
+var manual_ip := false
 
 
 ## Pulsing rings around a wifi dot.
@@ -44,6 +48,9 @@ func build() -> void:
 	content.add_child(UI.label("Looking for rooms...", 50))
 	rooms.add_theme_constant_override("separation", 24)
 	content.add_child(rooms)
+	var scan := UI.tile(UI.COLORS[2], UI.icon("qr", Color.WHITE, 140), "SCAN QR", "Point at the host's screen", Vector2(900, 200), 60)
+	scan.pressed.connect(UI.go.bind("res://ui/screens/qr_scan.gd"))
+	content.add_child(scan)
 	var link := UI.button("Can't find it? Enter IP", UI.INK.lightened(0.3), Vector2(720, 110), 40)
 	content.add_child(link)
 	manual.add_theme_constant_override("separation", 20)
@@ -63,6 +70,14 @@ func build() -> void:
 		link.hide()
 		manual.show()
 		ip_edit.grab_focus())
+	# one-shot results from the scanner: forget them so coming back here later doesn't redo them
+	UI.current_entry[1] = UI.current_entry[1].duplicate()
+	UI.current_entry[1].erase("scanned")
+	UI.current_entry[1].erase("manual_ip")
+	if manual_ip:
+		link.pressed.emit()
+	if scanned != "":
+		_join.call_deferred(scanned)
 
 
 func _process(_delta: float) -> void:
