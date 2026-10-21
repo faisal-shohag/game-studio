@@ -223,6 +223,8 @@ func _init() -> void:
 	act(s, 2, "play", card(G, 3))
 	check(s.winners == [0, 2] and s.phase == "over", "game over when 2nd place is decided")
 	check(Rules.ranking(s) == [0, 2, 1], "ranking")
+	var end := Rules.view_for(s, 0)
+	check(end.reveal == {0: [], 1: s.hands[1], 2: []}, "game over reveals every leftover hand")
 	check(act(s, 1, "draw").is_empty(), "nothing after game over")
 
 	s = table([0, 1, 2, 3], red5, {0: [card(R, 4)], 1: [card(R, 2)], 2: [card(B, 2), card(G, 2)], 3: [card(B, 3)]})
@@ -254,6 +256,7 @@ func _init() -> void:
 	other.pile.shuffle()
 	check(Rules.view_for(other, 1) == v, "view doesn't depend on other hands or the pile")
 	check(Rules.view_for(s, -1).hand.is_empty(), "spectator sees no hand")
+	check(not v.has("reveal"), "nothing revealed during play")
 	s.pile.append(card(B, 0))
 	ev = act(s, 0, "draw")
 	check(Rules.view_for(s, 1).drawn_id == -1, "others don't see the drawn card")

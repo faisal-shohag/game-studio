@@ -15,7 +15,7 @@ func _ready() -> void:
 	for k in 60000:
 		await get_tree().process_frame
 		if game.is_inside_tree() and game.view.phase == "over":
-			print("cards scene: OK, winners ", game.view.winners, ", +4s ", game.plus4)
+			print("cards scene: OK, winners ", game.view.winners)
 			get_tree().quit(0)
 			return
 	printerr("FAIL: cards scene game did not finish")

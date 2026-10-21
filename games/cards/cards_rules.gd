@@ -262,12 +262,13 @@ static func ranking(pub: Dictionary) -> Array:
 
 
 ## What player c may know: public fields, card counts and c's own hand. Never other hands or the
-## pile order. c = -1 gives a spectator view (empty hand).
+## pile order, except that once the game is over everyone's leftover cards are shown ("reveal").
+## c = -1 gives a spectator view (empty hand).
 static func view_for(s: Dictionary, c: int) -> Dictionary:
 	var counts := {}
 	for col in s.colors:
 		counts[col] = s.hands[col].size()
-	return {
+	var v := {
 		"colors": s.colors.duplicate(),
 		"me": c,
 		"hand": s.hands[c].duplicate() if s.hands.has(c) else [],
@@ -285,6 +286,9 @@ static func view_for(s: Dictionary, c: int) -> Dictionary:
 		"called": s.called.duplicate(),
 		"catchable": s.catchable,
 	}
+	if s.phase == "over":
+		v.reveal = s.hands.duplicate(true)
+	return v
 
 
 ## The event as player c may see it: drawn card ids only for the one who drew them.

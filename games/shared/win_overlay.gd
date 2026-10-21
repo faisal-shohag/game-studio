@@ -6,6 +6,7 @@ extends Control
 signal play_again
 signal home
 
+const Fx = preload("res://games/shared/fx.gd")
 const PLACE_TEXT := ["1st", "2nd", "3rd", "4th"]
 const REWARD := [100, 50, 25, 10]  # cosmetic stars for now; no currency yet
 # podium slot per place: [center x, block height]
@@ -140,7 +141,7 @@ func _ready() -> void:
 	leave.pressed.connect(home.emit)
 	add_child(leave)
 
-	_confetti(oy)
+	Fx.confetti(self, oy)
 
 
 func _process(delta: float) -> void:
@@ -154,47 +155,3 @@ func _draw() -> void:
 		var a := _ray_angle + i * TAU / 12
 		draw_colored_polygon(PackedVector2Array([_rays_at, _rays_at + Vector2.from_angle(a) * 1600,
 			_rays_at + Vector2.from_angle(a + TAU / 24) * 1600]), Color(1, 1, 1, 0.06))
-
-
-func _confetti(oy: float) -> void:
-	var colors := Gradient.new()
-	colors.offsets = PackedFloat32Array([0.0, 0.25, 0.5, 0.75])
-	colors.colors = PackedColorArray(UI.COLORS)
-	colors.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
-	for side in [0.0, 1080.0]:  # two corner bursts
-		var burst := _particles(colors)
-		burst.position = Vector2(side, oy + 200)
-		burst.one_shot = true
-		burst.explosiveness = 0.9
-		burst.amount = 70
-		burst.direction = Vector2(1 if side == 0.0 else -1, -1.2)
-		burst.spread = 35.0
-		burst.initial_velocity_min = 700.0
-		burst.initial_velocity_max = 1200.0
-		burst.gravity = Vector2(0, 900)
-	var rain := _particles(colors)  # light confetti that keeps falling
-	rain.position = Vector2(540, -30)
-	rain.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	rain.emission_rect_extents = Vector2(560, 10)
-	rain.amount = 50
-	rain.lifetime = 5.0
-	rain.direction = Vector2.DOWN
-	rain.spread = 15.0
-	rain.initial_velocity_min = 150.0
-	rain.initial_velocity_max = 260.0
-	rain.gravity = Vector2(0, 60)
-
-
-func _particles(colors: Gradient) -> CPUParticles2D:
-	var p := CPUParticles2D.new()
-	p.lifetime = 2.5
-	p.color_initial_ramp = colors
-	p.scale_amount_min = 10.0
-	p.scale_amount_max = 18.0
-	p.angle_min = 0.0
-	p.angle_max = 360.0
-	p.angular_velocity_min = -300.0
-	p.angular_velocity_max = 300.0
-	add_child(p)
-	p.emitting = true
-	return p

@@ -1,4 +1,4 @@
-## Table-game juice shared by every board game: popup words, table shake, confetti burst.
+## Table-game juice shared by every game: popup words, table shake, confetti burst and rain.
 
 
 ## Big bouncy word centered at height `y` ("Captured!", "Bonus roll!"), then floats up and fades.
@@ -49,3 +49,48 @@ static func burst(parent: Node, at: Vector2, color: Color) -> void:
 	parent.add_child(fx)
 	fx.emitting = true
 	parent.get_tree().create_timer(1.5).timeout.connect(fx.queue_free)
+
+
+## Results-screen confetti: two corner bursts plus a light rain that keeps falling.
+static func confetti(parent: Node, oy: float) -> void:
+	var colors := Gradient.new()
+	colors.offsets = PackedFloat32Array([0.0, 0.25, 0.5, 0.75])
+	colors.colors = PackedColorArray(UI.COLORS)
+	colors.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
+	for side in [0.0, 1080.0]:  # two corner bursts
+		var burst := _particles(parent, colors)
+		burst.position = Vector2(side, oy + 200)
+		burst.one_shot = true
+		burst.explosiveness = 0.9
+		burst.amount = 70
+		burst.direction = Vector2(1 if side == 0.0 else -1, -1.2)
+		burst.spread = 35.0
+		burst.initial_velocity_min = 700.0
+		burst.initial_velocity_max = 1200.0
+		burst.gravity = Vector2(0, 900)
+	var rain := _particles(parent, colors)
+	rain.position = Vector2(540, -30)
+	rain.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	rain.emission_rect_extents = Vector2(560, 10)
+	rain.amount = 50
+	rain.lifetime = 5.0
+	rain.direction = Vector2.DOWN
+	rain.spread = 15.0
+	rain.initial_velocity_min = 150.0
+	rain.initial_velocity_max = 260.0
+	rain.gravity = Vector2(0, 60)
+
+
+static func _particles(parent: Node, colors: Gradient) -> CPUParticles2D:
+	var p := CPUParticles2D.new()
+	p.lifetime = 2.5
+	p.color_initial_ramp = colors
+	p.scale_amount_min = 10.0
+	p.scale_amount_max = 18.0
+	p.angle_min = 0.0
+	p.angle_max = 360.0
+	p.angular_velocity_min = -300.0
+	p.angular_velocity_max = 300.0
+	parent.add_child(p)
+	p.emitting = true
+	return p

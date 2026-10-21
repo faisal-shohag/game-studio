@@ -6,7 +6,7 @@
 ## Add `drop` to the join command: client quits mid-game, host's bot must finish its seat.
 ## After the game the host presses Play Again; both print RESTARTED true.
 ## Cards: FINAL compares public info only, and the client prints SECRET ok if every event and view
-## it received carried only its own cards.
+## it received carried only its own cards (until game over, when every hand is revealed).
 extends Node
 
 
@@ -39,7 +39,7 @@ func _ready() -> void:
 	var leaks := []
 	if game_id == "cards" and not hosting:
 		game.shown.connect(func(ev: Dictionary, v: Dictionary):
-			if v.has("hands") or v.has("pile") or v.me != game.me or not game.state.is_empty():
+			if v.has("hands") or v.has("pile") or v.me != game.me or not game.state.is_empty() 					or (v.has("reveal") and v.phase != "over"):
 				leaks.append(v)
 			if ev.has("ids") and ev.color != game.me and not ev.ids.is_empty():
 				leaks.append(ev))

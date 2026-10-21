@@ -13,7 +13,7 @@ const Card = preload("res://games/cards/card.gd")
 const Hand = preload("res://games/cards/hand.gd")
 const Table = preload("res://games/cards/cards_table.gd")
 const Seat = preload("res://games/cards/seat.gd")
-const WinOverlay = preload("res://games/shared/win_overlay.gd")
+const Results = preload("res://games/cards/cards_results.gd")
 const Fx = preload("res://games/shared/fx.gd")
 const Games = preload("res://core/games.gd")
 const PLACES := ["1st place", "2nd place", "3rd place"]
@@ -54,7 +54,6 @@ var hud := Control.new()  # seats, buttons, hint, overlays
 var last_btn: Button
 var pass_btn: Button
 var _last_pulse: Tween
-var plus4 := [0, 0, 0, 0]  # per color, for the results screen
 var _picker: Control  # wild color choice
 var _results: Control
 var _base := -1  # seat drawn at the bottom; the others sit around from there
@@ -478,8 +477,6 @@ func _animate(ev: Dictionary, v: Dictionary) -> void:
 			if k == Rules.REVERSE:
 				table.dir = v.dir
 				table.spin_burst()
-			if k == Rules.WILD4:
-				plus4[c] += 1
 			table.top_color = UI.COLORS[ev.top_color]
 			if ev.out:
 				Fx.burst(table_root, _seat_pos(c), col)
@@ -631,7 +628,7 @@ func _close_picker() -> void:
 
 
 func _show_results() -> void:
-	_results = WinOverlay.new()  # set first so _next can't open it twice
+	_results = Results.new()  # set first so _next can't open it twice
 	await get_tree().create_timer(1.0).timeout
 	if not is_inside_tree():  # left during the pause
 		return
@@ -641,7 +638,7 @@ func _show_results() -> void:
 	_results.ranking = Rules.ranking(view)
 	_results.names = names
 	_results.me = me
-	_results.stats = range(4).map(func(c): return "Cards left %d    +4s %d" % [view.counts.get(c, 0), plus4[c]])
+	_results.reveal = view.get("reveal", {})
 	_results.can_restart = owners.is_empty() or multiplayer.is_server()
 	_results.play_again.connect(_play_again)
 	_results.home.connect(_to_menu)
