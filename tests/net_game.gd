@@ -5,6 +5,7 @@
 ## The joiner only names the game to check it: the host's room tells it what to load.
 ## Add `drop` to the join command: client quits mid-game, host's bot must finish its seat.
 ## After the game the host presses Play Again; both print RESTARTED true.
+## Avatars: the host plays with a photo, the guest with face 5; both print `avatars:`, which must match.
 ## Cards: FINAL compares public info only, and the client prints SECRET ok if every event and view
 ## it received carried only its own cards (until game over, when every hand is revealed).
 extends Node
@@ -16,6 +17,9 @@ func _ready() -> void:
 	var game_id := "snakes" if "snakes" in args else "cards" if "cards" in args else "ludo"
 	Engine.time_scale = 20
 	UI.settings.set_value("player", "name", "Host Hana" if hosting else "Guest Gil")  # not saved to disk
+	var pic := Image.create(300, 300, false, Image.FORMAT_RGB8)
+	pic.fill(Color.ORANGE)
+	UI._avatar = {"photo": UI.Avatar.photo_from(pic, Rect2(0, 0, 300, 300))} if hosting else {"face": 5}  # not saved either
 	await get_tree().process_frame
 	if hosting:
 		UI.go("res://ui/screens/lan_room.gd", {"hosting": true, "game": game_id})
@@ -36,6 +40,7 @@ func _ready() -> void:
 		game = get_tree().root.get_node_or_null("Screen")
 	print("loaded: ", game.scene_file_path.get_file(), " (expected ", game_id, ")")
 	print("seats: ", game.seats, " names: ", game.names)
+	print("avatars: ", game.avatars.map(func(a): return "photo" if a.has("photo") else "face %d" % a.face if a.has("face") else "-"))
 	var leaks := []
 	if game_id == "cards" and not hosting:
 		game.shown.connect(func(ev: Dictionary, v: Dictionary):

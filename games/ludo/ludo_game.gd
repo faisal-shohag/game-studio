@@ -20,6 +20,8 @@ var seats := ["human", "bot", "bot", "bot"]
 var owners := []
 ## Display name per color; filled in when empty.
 var names := []
+## Avatar per color ({} = default look); filled in when empty.
+var avatars := []
 ## Local player's color; their base is drawn bottom-left. -1 = first human seat.
 var me := -1
 
@@ -64,6 +66,10 @@ func _ready() -> void:
 		for c in 4:
 			var bot: bool = seats[c] == "bot" or (not owners.is_empty() and owners[c] == 0)
 			names.append(UI.player_name if c == me else Games.BOT_NAMES[c] if bot else "Player %d" % (c + 1))
+	if avatars.is_empty():  # offline: only you have one; bots and pass-and-play friends get the default
+		avatars = [{}, {}, {}, {}]
+		if me != -1:
+			avatars[me] = UI.avatar
 	_build(colors)
 	_layout()
 	_next()
@@ -98,6 +104,7 @@ func _build(colors: Array) -> void:
 		var panel := PlayerPanel.new()
 		panel.color = UI.COLORS[c]
 		panel.player_name = names[c]
+		panel.avatar = avatars[c]
 		panel.size = PANEL_SIZE
 		panel.position = Vector2(30 if v in [0, 3] else 650, _top_y if v < 2 else _bottom_y)
 		panel.tapped.connect(_on_roll_tap.bind(c))
@@ -370,6 +377,7 @@ func _show_results() -> void:
 			ranking.append(c)
 	_results.ranking = ranking
 	_results.names = names
+	_results.avatars = avatars
 	_results.me = me
 	_results.stats = range(4).map(func(c): return "Captures %d    Sixes %d" % [captures[c], sixes[c]])
 	_results.can_restart = owners.is_empty() or multiplayer.is_server()
@@ -386,12 +394,16 @@ func _play_again() -> void:
 		for c in 4:
 			if owners[c] == 0:  # players who left are bots now
 				n[c] = Games.BOT_NAMES[c]
-		_restart.rpc(owners, n)
+		var a := avatars.duplicate()
+		for c in 4:
+			if owners[c] == 0:
+				a[c] = {}
+		_restart.rpc(owners, n, a)
 
 
 @rpc("authority", "call_local", "reliable")
-func _restart(o: Array, n: Array) -> void:
-	UI.restart({"owners": o, "names": n})
+func _restart(o: Array, n: Array, a: Array) -> void:
+	UI.restart({"owners": o, "names": n, "avatars": a})
 
 
 func _unhandled_input(e: InputEvent) -> void:

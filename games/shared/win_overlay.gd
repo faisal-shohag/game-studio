@@ -15,6 +15,7 @@ const SLOTS := [[540.0, 320.0], [275.0, 230.0], [805.0, 165.0]]
 var ranking := []  # colors, winner first
 var names := []
 var me := -1  # local player's color, -1 = none (all bots)
+var avatars := []  # per color; a set one replaces the pawn on the podium
 var stats := []  # per color: one line of game-specific numbers ("Captures 2    Sixes 5")
 var can_restart := true  # LAN clients wait for the host instead
 var _ray_angle := 0.0
@@ -77,6 +78,9 @@ func _ready() -> void:
 		block.add_child(num)
 		add_child(block)
 		var pawn := UI.icon("pawn", UI.COLORS[c], 200)
+		if c < avatars.size() and not avatars[c].is_empty():
+			pawn.kind = "avatar"
+			pawn.avatar = avatars[c]
 		pawn.position = Vector2(x - 100, floor_y - h - 196)
 		var name_label := UI.label(names[c], 38)
 		name_label.size = Vector2(320, 50)

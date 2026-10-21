@@ -7,6 +7,7 @@ signal catch_pressed
 
 const FaceArt = preload("res://games/shared/face_art.gd")
 const CardArt = preload("res://games/cards/card_art.gd")
+const Avatar = preload("res://core/avatar.gd")
 const PORTRAIT := 150.0
 const FAN_MAX := 12
 const FAN_SCALE := 0.42
@@ -14,6 +15,7 @@ const FAN_SCALE := 0.42
 var color := Color.WHITE
 var variant := 0
 var player_name := ""
+var avatar := {}  # the player's own look; {} = this seat's face
 var facing := Vector2.DOWN  # from the portrait toward the table: where the fan goes
 var fan_visible := true
 var count := 0:
@@ -103,7 +105,8 @@ func _draw() -> void:
 		glow.set_corner_radius_all(34)
 		glow.anti_aliasing = true
 		draw_style_box(glow, Rect2(Vector2.ZERO, size).grow(12))
-	FaceArt.draw(self, c, PORTRAIT * 0.92, color, variant, happy)
+	if not Avatar.draw(self, c, PORTRAIT * 0.92, avatar, color, false, happy):
+		FaceArt.draw(self, c, PORTRAIT * 0.92, color, variant, happy)
 	# card-count badge on the top-right corner
 	var at := Vector2(PORTRAIT - 6, 8)
 	draw_circle(at, 30, UI.INK)

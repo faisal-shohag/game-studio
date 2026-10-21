@@ -5,6 +5,7 @@
 extends "res://ui/screen.gd"
 
 const Games = preload("res://core/games.gd")
+const Avatar = preload("res://core/avatar.gd")
 const PORT := 7790
 const DISCOVERY_PORT := 7791
 const HELLO := "GAMESTUDIO"  # broadcast: HELLO|game id|host name
@@ -15,6 +16,7 @@ var join_ip := ""
 var game := "ludo"  # host: set by the menu; joiner: taken from the host's _sync
 var owners := [1, 0, 0, 0]  # peer id per color; 0 = bot, -1 = off
 var names := ["", "", "", ""]  # player names per color (bots/off filled at start)
+var avatars := [{}, {}, {}, {}]  # players' avatars per color ({} = bot, off or not sent yet)
 var udp := PacketPeerUDP.new()
 var status: Label
 var info: Label
@@ -81,6 +83,7 @@ func build() -> void:
 			return
 		multiplayer.multiplayer_peer = peer
 		names[0] = UI.player_name
+		avatars[0] = UI.avatar
 		_status_text = "Waiting for friends"
 		info.text = "%s room  IP: %s\nTap an empty seat: Bot or Off" % [Games.LIST[game].name, ", ".join(_lan_ips())]
 		udp.set_broadcast_enabled(true)
@@ -120,7 +123,7 @@ func _fail(why: String) -> void:
 
 func _on_connected() -> void:
 	_status_text = "Waiting for host to start"
-	_hello.rpc_id(1, UI.player_name)
+	_hello.rpc_id(1, UI.player_name, UI.avatar)
 	_refresh()
 
 
@@ -135,7 +138,8 @@ func _on_peer_joined(id: int) -> void:
 		return
 	owners[free] = id
 	names[free] = "Player"
-	_sync.rpc(game, owners, names)
+	avatars[free] = {}
+	_sync.rpc(game, owners, names, avatars)
 
 
 func _on_peer_left(id: int) -> void:
@@ -144,19 +148,22 @@ func _on_peer_left(id: int) -> void:
 		var who: String = names[c]
 		owners[c] = 0
 		names[c] = ""
-		_sync.rpc(game, owners, names)
+		avatars[c] = {}
+		_sync.rpc(game, owners, names, avatars)
 		_announce.rpc("%s left" % who, false)
 
 
-## Joiner tells the host its name. Untrusted input: trimmed and length-capped.
+## Joiner tells the host its name and avatar. Untrusted input: the name is trimmed and
+## length-capped, the avatar checked (anything odd becomes the default look).
 @rpc("any_peer", "reliable")
-func _hello(player_name: String) -> void:
+func _hello(player_name: String, avatar: Dictionary) -> void:
 	var c := owners.find(multiplayer.get_remote_sender_id())
 	if not hosting or c == -1:
 		return
 	var clean := player_name.strip_edges().left(UI.NAME_MAX)
 	names[c] = clean if clean != "" else "Player"
-	_sync.rpc(game, owners, names)
+	avatars[c] = Avatar.clean(avatar)
+	_sync.rpc(game, owners, names, avatars)
 	_announce.rpc("%s joined!" % names[c], true)
 
 
@@ -170,15 +177,16 @@ func _announce(text: String, joined: bool) -> void:
 func _cycle(c: int) -> void:
 	if hosting and owners[c] <= 0:
 		owners[c] = -1 if owners[c] == 0 else 0
-		_sync.rpc(game, owners, names)
+		_sync.rpc(game, owners, names, avatars)
 
 
 @rpc("authority", "call_local", "reliable")
-func _sync(g: String, o: Array, n: Array) -> void:
+func _sync(g: String, o: Array, n: Array, a: Array) -> void:
 	if g in Games.LIST:
 		game = g
 	owners = o
 	names = n
+	avatars = a
 	_refresh()
 
 
@@ -195,9 +203,11 @@ func _refresh() -> void:
 		card.name.text = names[c] if o > 0 else Games.BOT_NAMES[c] if o == 0 else "Empty seat"
 		card.badge.text = "YOU" if o == me else "HOST" if o == 1 else "PLAYER" if o > 0 else "BOT" if o == 0 else "OFF"
 		var faces: bool = Games.LIST[game].faces  # a joiner only learns the game here
-		card.pawn.kind = "face" if faces else "pawn"
+		var own: Dictionary = avatars[c] if o > 0 else {}  # people show their avatar, bots the game's look
+		card.pawn.kind = "avatar" if not own.is_empty() else "face" if faces else "pawn"
+		card.pawn.avatar = own
 		card.pawn.count = c
-		card.pawn.disc = Color(1, 1, 1, 0.0 if faces else 0.35)
+		card.pawn.disc = Color(1, 1, 1, 0.0 if faces or not own.is_empty() else 0.35)
 		card.pawn.bob = o == me
 		card.pawn.queue_redraw()
 		card.button.modulate.a = 0.45 if o == -1 else 1.0
@@ -222,12 +232,12 @@ func _on_start() -> void:
 	for c in 4:
 		if owners[c] == 0:
 			full[c] = Games.BOT_NAMES[c]
-	_start.rpc(game, owners, full)
+	_start.rpc(game, owners, full, avatars)
 
 
 @rpc("authority", "call_local", "reliable")
-func _start(g: String, o: Array, n: Array) -> void:
+func _start(g: String, o: Array, n: Array, a: Array) -> void:
 	if not g in Games.LIST:  # host's app has a game this phone doesn't
 		_fail("Update the app to play this game")
 		return
-	UI.go(Games.LIST[g].scene, {"owners": o, "names": n})  # becomes /root/Screen on every phone
+	UI.go(Games.LIST[g].scene, {"owners": o, "names": n, "avatars": a})  # becomes /root/Screen on every phone

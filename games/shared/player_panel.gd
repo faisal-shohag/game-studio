@@ -5,9 +5,11 @@ extends Control
 signal tapped
 
 const PawnArt = preload("res://games/shared/pawn_art.gd")
+const Avatar = preload("res://core/avatar.gd")
 
 var color := Color.WHITE
 var player_name := ""
+var avatar := {}  # shown instead of the pawn when set
 var home := 0:
 	set(v):
 		home = v
@@ -66,7 +68,8 @@ func _draw() -> void:
 	var av := Vector2(84, size.y / 2 - 6)
 	draw_circle(av, 64, Color.WHITE)
 	draw_circle(av, 58, color.lightened(0.55))
-	PawnArt.draw(self, av + Vector2(0, 40), 0.85, color)
+	if not Avatar.draw(self, av, 112, avatar, color, true):
+		PawnArt.draw(self, av + Vector2(0, 40), 0.85, color)
 	var text := note if note != "" else status
 	if text != "":
 		draw_string_outline(UI.FONT, Vector2(162, 130), text, HORIZONTAL_ALIGNMENT_LEFT, size.x - 175, 34, 10, UI.INK)

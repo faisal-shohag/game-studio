@@ -9,6 +9,7 @@ signal home
 const Rules = preload("res://games/cards/cards_rules.gd")
 const CardArt = preload("res://games/cards/card_art.gd")
 const FaceArt = preload("res://games/shared/face_art.gd")
+const Avatar = preload("res://core/avatar.gd")
 const Fx = preload("res://games/shared/fx.gd")
 const PLACE_TEXT := ["1st", "2nd", "3rd", "4th"]
 const MEDALS := [Color("ffc312"), Color("c8d1e0"), Color("e08a4c"), Color("8c87b8")]
@@ -16,6 +17,7 @@ const REWARD := [100, 50, 25, 10]  # cosmetic stars, as WinOverlay
 
 var ranking := []  # colors, winner first
 var names := []
+var avatars := []  # per color ({} = the seat's face)
 var me := -1
 var reveal := {}  # color -> leftover card ids
 var can_restart := true
@@ -28,6 +30,7 @@ class ResultCard extends Control:
 	var color := Color.WHITE
 	var variant := 0
 	var player_name := ""
+	var avatar := {}
 	var place := 0
 	var hand := []
 	var finished := false
@@ -50,7 +53,9 @@ class ResultCard extends Control:
 		band.corner_radius_bottom_left = 0
 		band.corner_radius_bottom_right = 0
 		draw_style_box(band, Rect2(r.position + Vector2(8, 8) * s, Vector2(size.x - 16 * s, 150 * s)))
-		FaceArt.draw(self, Vector2(size.x / 2, 92 * s), 120 * s, color, variant, finished or winner)
+		var at := Vector2(size.x / 2, 92 * s)
+		if not Avatar.draw(self, at, 120 * s, avatar, color, false, finished or winner):
+			FaceArt.draw(self, at, 120 * s, color, variant, finished or winner)
 		# place medal, top-left
 		var m := Vector2(40, 40) * s
 		draw_circle(m, 30 * s, UI.INK)
@@ -118,6 +123,7 @@ func _ready() -> void:
 		card.color = UI.COLORS[c]
 		card.variant = c
 		card.player_name = names[c]
+		card.avatar = avatars[c] if c < avatars.size() else {}
 		card.place = place
 		card.hand = reveal.get(c, [])
 		card.finished = card.hand.is_empty()
