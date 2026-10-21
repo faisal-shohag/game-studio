@@ -36,6 +36,9 @@ const FULL_PULL := 330.0  # pull for full power
 const BOT_THINK := 0.6
 const SINK_FRAMES := 14.0
 const GUIDE := 520.0  # guide length past the first cushion
+const SHOT_CLOCK := 20.0  # seconds a person gets when others are waiting; then a weak shot
+const TRAIL := 10  # striker trail length, frames
+const HARD_HIT := 1500.0  # a contact this fast shakes the table
 
 var variant := "classic"
 ## Seat type per seat: "human", "bot", "off", or "remote" (played on another phone).
@@ -78,6 +81,8 @@ var _clock := 0.0
 var _done_events := 0
 var _last_clack := -1.0
 var _synced := []  # host: peers whose table is ready for events
+var _clock_tw: Tween
+var _shaken := false  # this shot already shook the table
 
 
 func _ready() -> void:
@@ -194,6 +199,8 @@ func _refresh() -> void:
 	for c in players:
 		var seat: Seat = players[c]
 		seat.active = c == view.turn and not over
+		if c != view.turn or over:
+			seat.chip = ""
 		if variant == "classic":  # men of their color already pocketed (partners share them)
 			seat.badge = str(Rules.MEN - _left(view, Rules.man_of(view, c)))
 		else:
@@ -275,10 +282,51 @@ func _next() -> void:
 		Sfx.play("your_turn", 0.0)
 		Input.vibrate_handheld(40)
 		if seats.count("human") > 1:
-			_popup("%s's turn" % names[c], UI.COLORS[c])
+			Fx.popup(hud, "%s's turn" % names[c], UI.COLORS[c], BOARD_AT.y + _oy + 160)  # below any shot popup
 	_turn_seen = c
 	if who == "bot":
 		_bot_turn(c)
+	elif _clock_on() and (who == "human" or owners[c] != 0):
+		_start_clock(c)
+
+
+## The shot clock runs only when other people are waiting (pass and play, LAN), not vs bots.
+func _clock_on() -> bool:
+	var people := 0
+	for c in 4:
+		if seats[c] == "human" or (seats[c] == "remote" and owners[c] != 0):
+			people += 1
+	return people > 1
+
+
+## A ring round the shooter's portrait runs down; on this phone's own seat, time up shoots weakly.
+## Every phone shows the ring; only the shooter's phone acts on it.
+func _start_clock(c: int) -> void:
+	_stop_clock()
+	var seat: Seat = players[c]
+	_clock_tw = create_tween()
+	_clock_tw.tween_method(func(v: float): seat.clock = v, 1.0, 0.0, SHOT_CLOCK)
+	_clock_tw.tween_callback(_time_up.bind(c))
+
+
+func _stop_clock() -> void:
+	if _clock_tw:
+		_clock_tw.kill()
+		_clock_tw = null
+	for c in players:
+		players[c].clock = -1.0
+
+
+func _time_up(c: int) -> void:
+	_stop_clock()
+	if not _my_turn() or view.turn != c:
+		return
+	_dragging = ""
+	board.aim = {}
+	var x := _x if Rules.can_place(view, c, _x) else _free_x(view, c, _x)
+	_popup("Time's up!", UI.COLORS[0])
+	_spot[c] = x
+	_intent({"x": x, "angle": 0.0, "power": 0.25}, c)
 
 
 ## Nearest striker spot to x that isn't on a coin.
@@ -332,6 +380,7 @@ func _bot_turn(c: int) -> void:
 
 ## The local player or a bot shoots. The host (or an offline phone) decides; guests ask the host.
 func _intent(shot: Dictionary, c: int) -> void:
+	_stop_clock()
 	if multiplayer.is_server():
 		_host_do(shot, c, 0)
 	else:
@@ -410,6 +459,7 @@ func _on_peer_left(id: int) -> void:
 
 
 func _on_host_left() -> void:
+	_stop_clock()
 	busy = true
 	set_process(false)
 	hint.text = "Host left the game"
@@ -590,6 +640,11 @@ func _animate(ev: Dictionary, after: Dictionary) -> void:
 			return
 		ev.sim = Physics.simulate(view.pieces, Rules.launch(ev.seat, ev.shot))
 	_spot[ev.seat] = ev.shot.x
+	_stop_clock()
+	players[ev.seat].chip = ""
+	board.trail = []
+	board.bulge = {}
+	_shaken = false
 	_ev = ev
 	_frames = ev.sim.frames
 	_ids = view.pieces.map(func(p): return p.id) + [-1]
@@ -599,8 +654,6 @@ func _animate(ev: Dictionary, after: Dictionary) -> void:
 	_after = after
 	board.spin = {}
 	board.sinking = {}
-	if ev.shot.power > 0.85:
-		Fx.shake(table)
 	Sfx.play("hop", 0.1, -4.0)
 	set_process(true)
 
@@ -619,11 +672,22 @@ func _process(delta: float) -> void:
 			continue
 		pieces.append({"id": id, "kind": _kinds[i], "x": f[i * 2], "y": f[i * 2 + 1]})
 		var moved := Vector2(f[i * 2] - prev[i * 2], f[i * 2 + 1] - prev[i * 2 + 1]).length()
-		board.spin[id] = board.spin.get(id, 0.0) + moved / Physics.COIN_R * 0.35 * (1 if id % 2 == 0 else -1)
+		board.spin[id] = board.spin.get(id, 0.0) + moved / Physics.COIN_R * 0.8 * (1 if id % 2 == 0 else -1)
 	var s := (n - 1) * 2
 	var striker_sink: float = board.sinking.get(-1, 0.0)
 	board.striker = {} if striker_sink >= 1.0 else {"x": f[s], "y": f[s + 1]}
-	board.striker_spin += Vector2(f[s] - prev[s], f[s + 1] - prev[s + 1]).length() / Physics.STRIKER_R * 0.3
+	var step := Vector2(f[s] - prev[s], f[s + 1] - prev[s + 1]).length()
+	board.striker_spin += step / Physics.STRIKER_R * 0.6
+	if not board.striker.is_empty() and step > 6.0:  # flying: leave a trail
+		board.trail.append(Vector2(f[s], f[s + 1]))
+	elif not board.trail.is_empty():
+		board.trail.pop_front()
+	while board.trail.size() > TRAIL:
+		board.trail.pop_front()
+	for k in board.bulge.keys():
+		board.bulge[k] += delta * 60.0 / 24.0
+		if board.bulge[k] >= 1.0:
+			board.bulge.erase(k)
 	for id in board.sinking:
 		board.sinking[id] = minf(1.0, board.sinking[id] + delta * 60.0 / SINK_FRAMES)
 	board.pieces = pieces
@@ -643,9 +707,14 @@ func _play_event(e: Dictionary) -> void:
 				return  # the break: one clack at a time is plenty
 			_last_clack = _clock
 			var loud := clampf(e.speed / 1800.0, 0.0, 1.0)
+			if e.type == "hit" and e.speed > HARD_HIT and not _shaken:  # a power shot lands
+				_shaken = true
+				Fx.shake(table, lerpf(8.0, 20.0, clampf((e.speed - HARD_HIT) / 1500.0, 0.0, 1.0)))
+				Input.vibrate_handheld(25)
 			Sfx.play("hop", 0.12, lerpf(-22.0, 0.0, loud) - (6.0 if e.type == "cushion" else 0.0))
 		"pocket":
 			board.sinking[e.id] = 0.01
+			board.bulge[e.pocket] = 0.0
 			var at := board.to_screen(Physics.POCKETS[e.pocket])
 			if e.id == -1:
 				Sfx.play("no_move", 0.0)
@@ -674,12 +743,13 @@ func _shot_over() -> void:
 		_popup("Queen back!", Board.QUEEN_RED)
 	elif ev.points > 0:
 		_popup("+%d" % ev.points, UI.COLORS[c])
-	elif ev.again:
-		_popup("Shoot again!", UI.COLORS[1])
 	if ev.foul != "" and ev.points < 0:
 		players[c].note = "%d" % ev.points
 	view = _after
+	board.trail = []
 	_refresh()
+	if ev.again and view.phase != "over":
+		players[c].chip = "Shoot again!"
 	if not ev.returned.is_empty():  # coins put back pop up in the middle
 		await get_tree().create_timer(0.25).timeout
 		Sfx.play("hop", 0.0)
@@ -698,6 +768,7 @@ func _popup(text: String, color: Color, big := false) -> void:
 # --- results ------------------------------------------------------------------
 
 func _show_results() -> void:
+	_stop_clock()
 	_results = WinOverlay.new()  # set first so _next can't open it twice
 	await get_tree().create_timer(1.0).timeout
 	if not is_inside_tree():

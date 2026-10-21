@@ -39,6 +39,10 @@ var striker_bad := false:  # sits on a coin: drawn red
 	set(v):
 		striker_bad = v
 		queue_redraw()
+## Recent striker spots (board units, oldest first), drawn as a fading trail while it flies.
+var trail := []
+## pocket index -> 0..1 how far through its bulge a net is (a coin just dropped in).
+var bulge := {}
 ## Aim guide: {dir: board direction, power: 0..1, path: board points, ghost: board point or null}.
 var aim := {}:
 	set(v):
@@ -81,13 +85,16 @@ func _draw() -> void:
 	_draw_frame()
 	_draw_markings()
 	for k in 4:
-		_draw_pocket(Physics.POCKETS[k] - Vector2(HALF, HALF))
+		_draw_pocket(Physics.POCKETS[k] - Vector2(HALF, HALF), bulge.get(k, 0.0))
 	for p in pieces:
 		var at := Vector2(p.x, p.y) - Vector2(HALF, HALF)
 		var sink: float = sinking.get(p.id, 0.0)
 		draw_piece(self, at, p.kind, spin.get(p.id, 0.0), 1.0 - sink * 0.55, 1.0 - sink * 0.8)
 	if not aim.is_empty():
 		_draw_aim()
+	for i in trail.size():
+		var f := (i + 1.0) / (trail.size() + 1.0)
+		draw_circle(trail[i] - Vector2(HALF, HALF), Physics.STRIKER_R * (0.35 + 0.55 * f), Color(STRIKER_RING.lightened(0.4), 0.28 * f))
 	if not striker.is_empty():
 		var at := Vector2(striker.x, striker.y) - Vector2(HALF, HALF)
 		draw_piece(self, at, Physics.STRIKER, striker_spin, 1.0, 1.0, striker_bad)
@@ -157,15 +164,20 @@ func _draw_markings() -> void:
 	draw_arc(Vector2.ZERO, 22, 0, TAU, 36, LINE, 1.5, true)
 
 
-func _draw_pocket(at: Vector2) -> void:
+## A pocket; `bulge` 0..1 swells the net once and lets it settle (sin bump).
+func _draw_pocket(at: Vector2, bulge := 0.0) -> void:
 	var r := Physics.POCKET_R + 3
+	var swell := sin(bulge * PI) * (1.0 - bulge * 0.5)
 	draw_circle(at, r + 4, WOOD_DARK)
 	draw_circle(at, r, Color("16110e"))
-	for k in 3:  # net rings and threads
-		draw_arc(at, r * (0.3 + k * 0.25), 0, TAU, 24, Color(1, 1, 1, 0.12), 1.5, true)
+	var net := Color(1, 1, 1, 0.12 + 0.18 * swell)
+	for k in 3:  # net rings and threads, stretched toward the rim while it bulges
+		draw_arc(at, r * (0.3 + k * 0.25) * (1.0 + 0.3 * swell), 0, TAU, 24, net, 1.5, true)
 	for k in 6:
 		var d := Vector2.from_angle(k * PI / 3 + 0.3)
-		draw_line(at + d * r * 0.15, at + d * (r - 2), Color(1, 1, 1, 0.12), 1.5, true)
+		draw_line(at + d * r * 0.15, at + d * (r - 2), net, 1.5, true)
+	if swell > 0.0:
+		draw_circle(at, r * 0.32 * swell, Color(0, 0, 0, 0.5))
 
 
 ## One carrom piece with its shadow. `rot` turns its pattern (pieces spin while they slide).

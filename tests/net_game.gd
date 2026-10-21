@@ -91,7 +91,8 @@ func _ready() -> void:
 		game._play_again()
 	await get_tree().create_timer(40.0).timeout
 	var fresh: Node = get_tree().root.get_node_or_null("Screen")
-	print("RESTARTED ", fresh != game, " ", _board(fresh))
+	# Carrom: the shot clock may already have fired on one phone, so compare what a restart keeps
+	print("RESTARTED ", fresh != game, " ", [fresh.variant, fresh.view.colors] if game_id == "carrom" else _board(fresh))
 	get_tree().quit()
 
 

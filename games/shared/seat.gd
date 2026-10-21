@@ -40,6 +40,23 @@ var happy := true:
 	set(v):
 		happy = v
 		queue_redraw()
+## Shot clock: time left as 0..1, drawn as a ring round the portrait that runs down; -1 = none.
+var clock := -1.0:
+	set(v):
+		clock = v
+		queue_redraw()
+## A green pill just above the portrait ("Shoot again!"); pops in when set.
+var chip := "":
+	set(v):
+		if v != "" and v != chip:
+			_chip_pop = 0.0
+			create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).tween_property(self, "_chip_pop", 1.0, 0.3)
+		chip = v
+		queue_redraw()
+var _chip_pop := 1.0:
+	set(v):
+		_chip_pop = v
+		queue_redraw()
 var active := false:
 	set(v):
 		if v != active:
@@ -115,8 +132,27 @@ func _draw() -> void:
 		glow.set_corner_radius_all(34)
 		glow.anti_aliasing = true
 		draw_style_box(glow, Rect2(Vector2.ZERO, size).grow(12))
+	if clock >= 0.0:  # runs clockwise from the top round the portrait's rounded square
+		var path := _frame_path(Rect2(Vector2.ZERO, size).grow(20), 40.0)
+		draw_polyline(path, Color(0, 0, 0, 0.35), 10, true)
+		draw_polyline(_part(path, clock), UI.COLORS[0] if clock < 0.25 else Color.WHITE, 10, true)
 	if not Avatar.draw(self, c, PORTRAIT * 0.92, avatar, color, false, happy):
 		FaceArt.draw(self, c, PORTRAIT * 0.92, color, variant, happy)
+	if chip != "":
+		var cw := UI.FONT.get_string_size(chip, HORIZONTAL_ALIGNMENT_LEFT, -1, 30).x + 36
+		var cx := clampf(c.x, 12 - position.x + cw / 2, 1068 - position.x - cw / 2)  # stay on screen
+		var cr := Rect2(Vector2(-cw / 2, -23), Vector2(cw, 46))
+		draw_set_transform(Vector2(cx, -27), 0.0, Vector2.ONE * _chip_pop)  # just above the portrait
+		var pill := StyleBoxFlat.new()
+		pill.bg_color = UI.COLORS[1]
+		pill.border_color = UI.INK
+		pill.set_border_width_all(4)
+		pill.set_corner_radius_all(24)
+		pill.anti_aliasing = true
+		draw_style_box(pill, cr)
+		draw_string_outline(UI.FONT, Vector2(cr.position.x, cr.position.y + 33), chip, HORIZONTAL_ALIGNMENT_CENTER, cw, 30, 6, UI.INK)
+		draw_string(UI.FONT, Vector2(cr.position.x, cr.position.y + 33), chip, HORIZONTAL_ALIGNMENT_CENTER, cw, 30, Color.WHITE)
+		draw_set_transform(Vector2.ZERO)
 	# count badge on the top-right corner; a pill when the text is wide
 	var at := Vector2(PORTRAIT - 6, 8)
 	var text := badge if badge != "" else str(count)
@@ -143,6 +179,35 @@ func _draw() -> void:
 		var r := Rect2(Vector2(c.x - w / 2, PORTRAIT - 40), Vector2(w, 46))
 		draw_style_box(pill, r)
 		draw_string(UI.FONT, Vector2(r.position.x, r.position.y + 33), note, HORIZONTAL_ALIGNMENT_CENTER, w, 30, Color.WHITE)
+
+
+## Closed outline of a rounded rect, starting at its top middle and going clockwise.
+static func _frame_path(r: Rect2, radius: float) -> PackedVector2Array:
+	var pts := PackedVector2Array([Vector2(r.get_center().x, r.position.y)])
+	var corners := [Vector2(r.end.x - radius, r.position.y + radius), Vector2(r.end.x - radius, r.end.y - radius),
+		Vector2(r.position.x + radius, r.end.y - radius), Vector2(r.position.x + radius, r.position.y + radius)]
+	for k in 4:
+		for i in 9:
+			pts.append(corners[k] + Vector2.from_angle(-PI / 2 + (k + i / 8.0) * PI / 2) * radius)
+	pts.append(pts[0])
+	return pts
+
+
+## The first `f` (0..1) of a polyline, by length.
+static func _part(path: PackedVector2Array, f: float) -> PackedVector2Array:
+	var total := 0.0
+	for i in path.size() - 1:
+		total += path[i].distance_to(path[i + 1])
+	var left := total * clampf(f, 0.0, 1.0)
+	var out := PackedVector2Array([path[0]])
+	for i in path.size() - 1:
+		var d := path[i].distance_to(path[i + 1])
+		if d >= left:
+			out.append(path[i].lerp(path[i + 1], left / maxf(d, 0.001)))
+			break
+		out.append(path[i + 1])
+		left -= d
+	return out
 
 
 ## The hand as backs fanned across `at`, standing on the player's side of it.

@@ -19,10 +19,11 @@ static func popup(hud: Control, text: String, color: Color, y: float, big := fal
 	tw.tween_callback(l.queue_free)
 
 
-static func shake(node: Node2D) -> void:
+static func shake(node: Node2D, strength := 12.0) -> void:
 	var tw := node.create_tween()
 	for k in 6:
-		tw.tween_property(node, "position", Vector2(randf_range(-12, 12), randf_range(-12, 12)), 0.04)
+		var s := strength * (1.0 - k / 8.0)  # dies down
+		tw.tween_property(node, "position", Vector2(randf_range(-s, s), randf_range(-s, s)), 0.04)
 	tw.tween_property(node, "position", Vector2.ZERO, 0.04)
 
 
