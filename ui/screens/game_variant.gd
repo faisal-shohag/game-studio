@@ -53,12 +53,12 @@ func _pick(v: String) -> void:
 func _rounds_toggle(options: Array) -> Control:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 16)
-	col.add_child(UI.label("ROUNDS", 44, Color(1, 1, 1, 0.85)))
+	col.add_child(UI.label("ROUNDS", 44, UI.INK_SOFT))
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 20)
 	for n in options:
-		var b := UI.button("1 ROUND" if n == 1 else "BEST OF %d" % n, UI.INK.lightened(0.3), Vector2(420, 130), 52)
+		var b := UI.button("1 ROUND" if n == 1 else "BEST OF %d" % n, UI.CREAM, Vector2(420, 130), 52)
 		b.pressed.connect(_set_rounds.bind(n))
 		row.add_child(b)
 		_seg.append([n, b])
@@ -70,7 +70,7 @@ func _rounds_toggle(options: Array) -> Control:
 func _set_rounds(n: int, save := true) -> void:
 	rounds = n
 	for s in _seg:
-		UI.paint(s[1], UI.ACCENT if s[0] == n else UI.INK.lightened(0.3))
+		UI.paint(s[1], UI.ACCENT if s[0] == n else UI.CREAM)
 	if save:
 		UI.settings.set_value(game, "rounds", n)
 		UI.settings.save(UI.SETTINGS_PATH)

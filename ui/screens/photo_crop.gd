@@ -25,7 +25,7 @@ func build() -> void:
 	_tex = ImageTexture.create_from_image(image)
 	_cover = VIEW / minf(image.get_width(), image.get_height())
 	_offset = (Vector2(VIEW, VIEW) - Vector2(image.get_size()) * _cover) / 2
-	content.add_child(UI.label("Drag to move, pinch to zoom", 44, Color(1, 1, 1, 0.8)))
+	content.add_child(UI.label("Drag to move, pinch to zoom", 44, UI.INK_SOFT))
 	view.custom_minimum_size = Vector2(VIEW, VIEW)
 	view.clip_contents = true
 	view.mouse_filter = MOUSE_FILTER_IGNORE
@@ -34,7 +34,7 @@ func build() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 20)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	var minus := UI.button("-", UI.INK.lightened(0.3), Vector2(110, 110), 70)
+	var minus := UI.button("-", UI.CREAM, Vector2(110, 110), 70)
 	minus.pressed.connect(func(): slider.value -= 0.4)
 	row.add_child(minus)
 	slider.min_value = 1.0
@@ -44,7 +44,7 @@ func build() -> void:
 	slider.add_theme_icon_override("grabber", _dot(56, Color.WHITE))
 	slider.add_theme_icon_override("grabber_highlight", _dot(56, UI.COLORS[2]))
 	var track := StyleBoxFlat.new()
-	track.bg_color = Color(1, 1, 1, 0.25)
+	track.bg_color = Color(UI.INK, 0.2)
 	track.set_corner_radius_all(10)
 	track.content_margin_top = 10
 	track.content_margin_bottom = 10
@@ -55,7 +55,7 @@ func build() -> void:
 	slider.add_theme_stylebox_override("grabber_area_highlight", fill)
 	slider.value_changed.connect(func(v: float): _set_zoom(v))
 	row.add_child(slider)
-	var plus := UI.button("+", UI.INK.lightened(0.3), Vector2(110, 110), 70)
+	var plus := UI.button("+", UI.CREAM, Vector2(110, 110), 70)
 	plus.pressed.connect(func(): slider.value += 0.4)
 	row.add_child(plus)
 	content.add_child(row)

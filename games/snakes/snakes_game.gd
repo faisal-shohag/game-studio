@@ -118,11 +118,7 @@ func _build(colors: Array) -> void:
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 46)
 	hud.add_child(hint)
-	var back := UI.button("", UI.INK.lightened(0.3), Vector2(120, 120))
-	var arrow := UI.icon("back", Color.WHITE, 100)
-	arrow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	arrow.offset_bottom = -10
-	back.add_child(arrow)
+	var back := UI.icon_button("back", 120)
 	back.position = Vector2(30, 50)
 	back.pressed.connect(on_back)
 	hud.add_child(back)

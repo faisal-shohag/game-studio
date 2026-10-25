@@ -193,11 +193,7 @@ func _build(colors: Array) -> void:
 	last_btn.pressed.connect(func(): if _my_turn(): _intent({"do": "last"}, me))
 	last_btn.visible = me != -1
 	hud.add_child(last_btn)
-	var back := UI.button("", UI.INK.lightened(0.3), Vector2(120, 120))
-	var arrow := UI.icon("back", Color.WHITE, 100)
-	arrow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	arrow.offset_bottom = -10
-	back.add_child(arrow)
+	var back := UI.icon_button("back", 120)
 	back.position = Vector2(30, 50)
 	back.pressed.connect(on_back)
 	hud.add_child(back)

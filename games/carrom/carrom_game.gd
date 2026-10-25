@@ -161,11 +161,7 @@ func _build(colors: Array) -> void:
 	status.add_theme_font_size_override("font_size", 34)
 	status.add_theme_color_override("font_color", Color(1, 1, 1, 0.8))
 	hud.add_child(status)
-	var back := UI.button("", UI.INK.lightened(0.3), Vector2(120, 120))
-	var arrow := UI.icon("back", Color.WHITE, 100)
-	arrow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	arrow.offset_bottom = -10
-	back.add_child(arrow)
+	var back := UI.icon_button("back", 120)
 	back.position = Vector2(30, 50)
 	back.pressed.connect(on_back)
 	hud.add_child(back)

@@ -34,7 +34,7 @@ func build() -> void:
 	grid.add_theme_constant_override("v_separation", 24)
 	for n in Avatar.FACES:
 		_tile(grid, {"face": n}, UI.COLORS[n % 4])
-	_tile(grid, photo, UI.INK.lightened(0.3), true)
+	_tile(grid, photo, UI.CREAM, true)
 	content.add_child(grid)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 24)
@@ -71,7 +71,7 @@ func _tile(grid: GridContainer, a: Dictionary, color: Color, is_photo := false) 
 	col.mouse_filter = MOUSE_FILTER_IGNORE
 	var icon: Control
 	if is_photo and a.is_empty():
-		icon = UI.icon("camera", Color.WHITE, 110)
+		icon = UI.icon("camera", UI.INK, 110)
 	else:
 		icon = UI.icon("avatar", color, 110 if is_photo else 150)
 		icon.avatar = a
@@ -99,7 +99,7 @@ func _refresh() -> void:
 		var style: StyleBoxFlat = b.get_theme_stylebox("normal").duplicate()
 		style.set_border_width_all(10 if picked else 0)
 		style.border_width_bottom = 18 if picked else 12
-		style.border_color = Color.WHITE if picked else style.bg_color.darkened(0.3)
+		style.border_color = UI.INK if picked else style.bg_color.darkened(0.3)
 		b.add_theme_stylebox_override("normal", style)
 		b.add_theme_stylebox_override("hover", style)
 

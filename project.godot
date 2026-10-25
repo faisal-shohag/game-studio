@@ -15,7 +15,7 @@ run/main_scene="res://ui/boot.tscn"
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.7")
 config/icon="res://assets/brand/icon_192.png"
-boot_splash/bg_color=Color(0.9647, 0.9647, 0.9843, 1)
+boot_splash/bg_color=Color(1, 0.9608, 0.8941, 1)
 boot_splash/image="res://assets/brand/splash.png"
 boot_splash/minimum_display_time=1500
 
@@ -39,4 +39,4 @@ window/handheld/orientation=1
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
-environment/defaults/default_clear_color=Color(0.11, 0.13, 0.2, 1)
+environment/defaults/default_clear_color=Color(0.9686, 0.902, 0.7843, 1)

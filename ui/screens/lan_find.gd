@@ -26,7 +26,7 @@ class Radar extends Control:
 		var t := Time.get_ticks_msec() / 1000.0
 		for k in 3:
 			var p := fmod(t * 0.5 + k / 3.0, 1.0)
-			draw_arc(c, 70 + p * 120, 0, TAU, 64, Color(1, 1, 1, (1.0 - p) * 0.7), 8, true)
+			draw_arc(c, 70 + p * 120, 0, TAU, 64, Color(UI.INK, (1.0 - p) * 0.5), 8, true)
 		draw_circle(c, 70, UI.COLORS[3])
 		draw_arc(c, 70, 0, TAU, 64, UI.INK, 8, true)
 		for r in [1, 2]:
@@ -48,10 +48,10 @@ func build() -> void:
 	content.add_child(UI.label("Looking for rooms...", 50))
 	rooms.add_theme_constant_override("separation", 24)
 	content.add_child(rooms)
-	var scan := UI.tile(UI.COLORS[2], UI.icon("qr", Color.WHITE, 140), "SCAN QR", "Point at the host's screen", Vector2(900, 200), 60)
+	var scan := UI.tile(UI.COLORS[2], UI.icon("qr", UI.ink_on(UI.COLORS[2]), 140), "SCAN QR", "Point at the host's screen", Vector2(900, 200), 60)
 	scan.pressed.connect(UI.go.bind("res://ui/screens/qr_scan.gd"))
 	content.add_child(scan)
-	var link := UI.button("Can't find it? Enter IP", UI.INK.lightened(0.3), Vector2(720, 110), 40)
+	var link := UI.button("Can't find it? Enter IP", UI.CREAM, Vector2(720, 110), 40)
 	content.add_child(link)
 	manual.add_theme_constant_override("separation", 20)
 	ip_edit.placeholder_text = "192.168.x.x"
@@ -88,7 +88,7 @@ func _process(_delta: float) -> void:
 			continue
 		var info: Dictionary = Games.LIST[parts[1]]
 		var host_name := parts[2].strip_edges().left(UI.NAME_MAX)
-		var card := UI.tile(UI.COLORS[info.color], UI.icon("wifi", Color.WHITE, 140),
+		var card := UI.tile(UI.COLORS[info.color], UI.icon("wifi", UI.ink_on(UI.COLORS[info.color]), 140),
 			"%s's room" % (host_name if host_name != "" else "Friend"), "%s - tap to join  %s" % [info.name, ip], Vector2(900, 200), 54)
 		card.pressed.connect(_join.bind(ip))
 		rooms.add_child(card)

@@ -35,7 +35,7 @@ func build() -> void:
 		var pawn := UI.icon("pawn", UI.COLORS[c], 260)
 		pawn.disc = Color(1, 1, 1, 0.35)
 		col.add_child(pawn)
-		var badge := UI.label("", 56)
+		var badge := UI.label_on(UI.COLORS[c], "", 56)
 		col.add_child(badge)
 		b.add_child(col)
 		b.pressed.connect(_tap.bind(c))
@@ -102,10 +102,10 @@ func _refresh() -> void:
 		card.badge.text = badge
 		card.pawn.bob = seats[c] == "human"
 		var style := UI.box(UI.COLORS[c])
-		if seats[c] == "human":  # thick white frame on picked colors
+		if seats[c] == "human":  # thick brown frame on picked colors
 			style.set_border_width_all(12)
 			style.border_width_bottom = 20
-			style.border_color = Color.WHITE
+			style.border_color = UI.INK
 		card.button.add_theme_stylebox_override("normal", style)
 		card.button.add_theme_stylebox_override("hover", style)
 		card.button.modulate.a = 0.5 if any and seats[c] == "off" else 1.0

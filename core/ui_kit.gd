@@ -3,11 +3,15 @@ extends Node
 
 const Icon = preload("res://ui/icon.gd")
 const Avatar = preload("res://core/avatar.gd")
-const COLORS := [Color("ff4757"), Color("2ed573"), Color("ffc312"), Color("1e90ff")]
+const COLORS := [Color("f25c54"), Color("6cc551"), Color("ffc93c"), Color("4aa3ff")]
 const NAMES := ["Red", "Green", "Yellow", "Blue"]
-const INK := Color("23194d")  # outlines and dark text
-const ACCENT := Color("ff9f1a")
-const LOCKED := Color("8c87b8")
+const INK := Color("5a3420")  # outlines and dark text: warm brown
+const INK_SOFT := Color(INK, 0.65)  # subtitles and hints
+const CREAM := Color("fff5e4")  # panels, dialogs, plain buttons
+const ACCENT := Color("f59a3c")
+const LOCKED := Color("d3c2a5")
+const BG_TOP := Color("f7e6c8")
+const BG_BOTTOM := Color("eac48e")
 const FONT := preload("res://assets/fonts/LilitaOne-Regular.ttf")
 const SETTINGS_PATH := "user://settings.cfg"
 const PHOTO_PATH := "user://avatar.jpg"
@@ -64,11 +68,10 @@ func _ready() -> void:
 	ThemeDB.fallback_font = FONT  # for controls the root theme can't reach
 	var grad := GradientTexture2D.new()
 	grad.gradient = Gradient.new()
-	grad.gradient.set_color(0, Color("7b5cff"))
-	grad.gradient.set_color(1, Color("2a1a78"))
-	grad.fill = GradientTexture2D.FILL_RADIAL
-	grad.fill_from = Vector2(0.5, 0.3)
-	grad.fill_to = Vector2(1.2, 1.1)
+	grad.gradient.set_color(0, BG_TOP)
+	grad.gradient.set_color(1, BG_BOTTOM)
+	grad.fill_from = Vector2(0.5, 0)
+	grad.fill_to = Vector2(0.5, 1)
 	var bg := TextureRect.new()
 	bg.texture = grad
 	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -142,20 +145,20 @@ func confirm(title: String, text: String, yes := "LEAVE", no := "STAY") -> bool:
 	root.theme = get_tree().root.theme  # themes don't flow through CanvasLayers
 	root.size = view
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.6)
+	dim.color = Color(INK, 0.45)
 	dim.size = view
 	root.add_child(dim)
 	var center := CenterContainer.new()
 	center.size = view
 	root.add_child(center)
 	var card := PanelContainer.new()
-	var style := box(INK.lightened(0.2), 14, 48)
+	var style := box(CREAM, 14, 48)
 	style.set_content_margin_all(56)
 	card.add_theme_stylebox_override("panel", style)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 36)
 	col.add_child(label(title, 80))
-	col.add_child(label(text, 44, Color(1, 1, 1, 0.85)))
+	col.add_child(label(text, 44, INK_SOFT))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 30)
 	var b_no := button(no, COLORS[1], Vector2(340, 140))
@@ -188,6 +191,7 @@ func toast(text: String, color := INK) -> void:
 	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pill.add_theme_font_size_override("font_size", 46)
 	pill.add_theme_stylebox_override("normal", box(color, 10, 60))
+	pill.add_theme_color_override("font_color", ink_on(color))
 	layer.add_child(pill)
 	get_tree().root.add_child(layer)
 	await get_tree().process_frame  # let the pill size itself
@@ -250,9 +254,9 @@ func box(color: Color, lip := 12, radius := 40) -> StyleBoxFlat:
 	s.border_color = color.darkened(0.3)
 	s.set_content_margin_all(24)
 	s.content_margin_bottom = 24 + lip
-	s.shadow_color = Color(0, 0, 0, 0.25)
+	s.shadow_color = Color(INK, 0.18)
 	s.shadow_size = 6
-	s.shadow_offset = Vector2(0, 8)
+	s.shadow_offset = Vector2(0, 6)
 	return s
 
 
@@ -265,6 +269,27 @@ func paint(b: Button, color: Color) -> void:
 	b.add_theme_stylebox_override("pressed", pressed)
 	b.add_theme_stylebox_override("disabled", box(LOCKED))
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var fc := ink_on(color)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(c, fc)
+	b.add_theme_color_override("font_shadow_color", _shadow_on(color))
+
+
+## Text color that reads on `bg`: brown on light colors (cream, yellow), white on the rest.
+func ink_on(bg: Color) -> Color:
+	return INK if bg.get_luminance() > 0.7 else Color.WHITE
+
+
+## Soft drop shadow under white text on a colored surface; none under brown text.
+func _shadow_on(bg: Color) -> Color:
+	return Color(0, 0, 0, 0) if ink_on(bg) == INK else Color(bg.darkened(0.45), 0.6)
+
+
+## Label colored to read on a `bg` surface it sits on.
+func label_on(bg: Color, text: String, font_size := 52, align := HORIZONTAL_ALIGNMENT_CENTER) -> Label:
+	var l := label(text, font_size, ink_on(bg), align)
+	l.add_theme_color_override("font_shadow_color", _shadow_on(bg))
+	return l
 
 
 func button(text: String, color := ACCENT, min_size := Vector2(720, 150), font_size := 64) -> Button:
@@ -292,15 +317,47 @@ func tile(color: Color, icon_node: Control, title: String, subtitle := "", min_s
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(label(title, title_size, Color.WHITE, HORIZONTAL_ALIGNMENT_LEFT))
+	col.add_child(label_on(color, title, title_size, HORIZONTAL_ALIGNMENT_LEFT))
 	if subtitle != "":
-		col.add_child(label(subtitle, maxi(int(title_size * 0.55), 30), Color(1, 1, 1, 0.9), HORIZONTAL_ALIGNMENT_LEFT))
+		var sub := label_on(color, subtitle, maxi(int(title_size * 0.55), 30), HORIZONTAL_ALIGNMENT_LEFT)
+		sub.modulate.a = 0.9
+		col.add_child(sub)
 	row.add_child(col)
 	b.add_child(row)
 	return b
 
 
-func label(text: String, font_size := 52, color := Color.WHITE, align := HORIZONTAL_ALIGNMENT_CENTER) -> Label:
+## Square game card: big icon on top, title under it (Home grid).
+func card_tile(color: Color, icon_node: Control, title: String, min_size := Vector2(470, 400), title_size := 56) -> Button:
+	var b := button("", color, min_size)
+	var col := VBoxContainer.new()
+	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	col.offset_bottom = -12
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 10)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_node.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	col.add_child(icon_node)
+	var l := label_on(color, title, title_size)
+	l.add_theme_constant_override("line_spacing", -12)
+	col.add_child(l)
+	b.add_child(col)
+	return b
+
+
+## Round cream button with a brown icon (back, sound).
+func icon_button(kind: String, size := 120) -> Button:
+	var b := button("", CREAM, Vector2(size, size))
+	for s in ["normal", "hover", "pressed", "disabled"]:
+		(b.get_theme_stylebox(s) as StyleBoxFlat).set_corner_radius_all(size / 2)
+	var i := icon(kind, INK, int(size * 0.8))
+	i.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	i.offset_bottom = -10
+	b.add_child(i)
+	return b
+
+
+func label(text: String, font_size := 52, color := INK, align := HORIZONTAL_ALIGNMENT_CENTER) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.horizontal_alignment = align
@@ -356,19 +413,20 @@ func _make_theme() -> Theme:
 	t.default_font = FONT
 	t.default_font_size = 52
 	for type in ["Label", "Button"]:
-		t.set_color("font_outline_color", type, INK)
-		t.set_constant("outline_size", type, 14)
-	t.set_color("font_color", "Label", Color.WHITE)
+		t.set_constant("shadow_offset_x", type, 0)
+		t.set_constant("shadow_offset_y", type, 4)
+	t.set_color("font_color", "Label", INK)
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 		t.set_color(c, "Button", Color.WHITE)
-	t.set_color("font_disabled_color", "Button", Color(1, 1, 1, 0.75))
+	t.set_color("font_shadow_color", "Button", Color(0, 0, 0, 0.18))
+	t.set_color("font_disabled_color", "Button", Color(INK, 0.5))
 	t.set_stylebox("normal", "Button", box(ACCENT))
 	t.set_stylebox("hover", "Button", box(ACCENT.lightened(0.08)))
 	t.set_stylebox("pressed", "Button", box(ACCENT.darkened(0.05), 4))
 	t.set_stylebox("disabled", "Button", box(LOCKED))
 	t.set_stylebox("focus", "Button", StyleBoxEmpty.new())
-	var field := box(Color.WHITE, 8, 36)
-	field.border_color = Color("c9c3f0")
+	var field := box(CREAM, 8, 36)
+	field.border_color = Color("e0c9a3")
 	t.set_stylebox("normal", "LineEdit", field)
 	t.set_stylebox("focus", "LineEdit", StyleBoxEmpty.new())
 	t.set_color("font_color", "LineEdit", INK)

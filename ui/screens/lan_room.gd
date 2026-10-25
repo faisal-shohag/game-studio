@@ -40,7 +40,7 @@ func _init() -> void:
 func build() -> void:
 	status = UI.label("", 50)
 	content.add_child(status)
-	info = UI.label("", 36, Color(1, 1, 1, 0.75))
+	info = UI.label("", 36, UI.INK_SOFT)
 	if hosting:  # the QR friends scan, with the room details beside it
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 34)
@@ -53,7 +53,7 @@ func build() -> void:
 		var col := VBoxContainer.new()
 		col.alignment = BoxContainer.ALIGNMENT_CENTER
 		col.add_theme_constant_override("separation", 12)
-		col.add_child(UI.label("Scan to join" if qr.visible else "No Wi-Fi", 60, Color.WHITE, HORIZONTAL_ALIGNMENT_LEFT))
+		col.add_child(UI.label("Scan to join" if qr.visible else "No Wi-Fi", 60, UI.INK, HORIZONTAL_ALIGNMENT_LEFT))
 		info.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		col.add_child(info)
 		row.add_child(col)
@@ -73,11 +73,12 @@ func build() -> void:
 		var pawn := UI.icon("pawn", UI.COLORS[c], 190)
 		pawn.disc = Color(1, 1, 1, 0.35)
 		col.add_child(pawn)
-		var name_label := UI.label("", 40)
+		var name_label := UI.label_on(UI.COLORS[c], "", 40)
 		name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		name_label.custom_minimum_size.x = 380
 		col.add_child(name_label)
-		var badge := UI.label("", 32, Color(1, 1, 1, 0.85))
+		var badge := UI.label_on(UI.COLORS[c], "", 32)
+		badge.modulate.a = 0.85
 		col.add_child(badge)
 		b.add_child(col)
 		b.pressed.connect(_cycle.bind(c))
@@ -129,7 +130,7 @@ func _room_name() -> String:
 ## The room QR, big over everything; a tap or back closes it.
 func _show_big_qr(text: String) -> void:
 	var layer := ColorRect.new()
-	layer.color = Color(0.05, 0.03, 0.15, 0.92)
+	layer.color = Color(UI.BG_TOP, 0.96)
 	layer.size = get_viewport_rect().size
 	var qr := QrCode.new()
 	qr.text = text

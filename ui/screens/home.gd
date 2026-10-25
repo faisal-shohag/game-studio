@@ -8,11 +8,8 @@ func _init() -> void:
 
 func build() -> void:
 	UI.reset_network()  # back from a LAN game
-	var sound := UI.button("", UI.INK.lightened(0.3), Vector2(110, 110))
-	var speaker := UI.icon("mute" if Sfx.muted else "sound", Color.WHITE, 100)
-	speaker.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	speaker.offset_bottom = -10
-	sound.add_child(speaker)
+	var sound := UI.icon_button("mute" if Sfx.muted else "sound", 110)
+	var speaker: Control = sound.get_child(0)
 	sound.pressed.connect(func():
 		Sfx.set_muted(not Sfx.muted)
 		speaker.kind = "mute" if Sfx.muted else "sound"
@@ -20,7 +17,7 @@ func build() -> void:
 	top.add_child(sound)
 	top.move_child(sound, 0)
 	# profile chip: your avatar and name; tap to edit
-	var chip := UI.button("", UI.INK.lightened(0.3), Vector2(0, 110), 40)
+	var chip := UI.button("", UI.CREAM, Vector2(0, 110), 40)
 	var row := HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	row.offset_left = 14
@@ -30,6 +27,7 @@ func build() -> void:
 	row.mouse_filter = MOUSE_FILTER_IGNORE
 	var face := UI.icon("avatar", UI.COLORS[0], 84)
 	face.avatar = UI.avatar
+	face.round = true
 	face.size_flags_vertical = SIZE_SHRINK_CENTER
 	row.add_child(face)
 	var label := UI.label(UI.player_name, 40)
@@ -40,24 +38,22 @@ func build() -> void:
 	chip.pressed.connect(func(): UI.go("res://ui/screens/welcome.gd", {"show_back": true}))
 	top.add_child(chip)
 
-	var logo := UI.label("GAME\nSTUDIO", 150, UI.COLORS[2])
-	logo.add_theme_constant_override("outline_size", 24)
-	logo.add_theme_constant_override("line_spacing", -30)
+	var logo := UI.label("GAME STUDIO", 120, UI.ACCENT)
+	logo.add_theme_color_override("font_shadow_color", UI.ACCENT.darkened(0.35))
+	logo.add_theme_constant_override("shadow_offset_y", 8)
 	content.add_child(logo)
-	content.add_child(UI.label("Classic games, together", 44, Color(1, 1, 1, 0.8)))
+	content.add_child(UI.label("Classic games, together", 44, UI.INK_SOFT))
 
-	var ludo := UI.tile(UI.COLORS[0], UI.icon("board", Color.WHITE, 200), "LUDO", "2-4 players", Vector2(940, 220), 96)
-	ludo.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "ludo"}))
-	content.add_child(ludo)
-	var snakes := UI.tile(UI.COLORS[1], UI.icon("ladder", Color.WHITE, 200), "SNAKES & LADDERS", "2-4 players", Vector2(940, 220), 64)
-	snakes.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "snakes"}))
-	content.add_child(snakes)
-	var cards := UI.tile(UI.COLORS[3], UI.icon("cards", Color.WHITE, 200), "COLOR CARDS", "2-4 players", Vector2(940, 220), 80)
-	cards.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "cards"}))
-	content.add_child(cards)
-	var carrom := UI.tile(UI.COLORS[2], UI.icon("carrom", Color.WHITE, 200), "CARROM", "2-4 players", Vector2(940, 220), 96)
-	carrom.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "carrom"}))
-	content.add_child(carrom)
-	var pens := UI.tile(UI.COLORS[0].lerp(UI.COLORS[3], 0.5), UI.icon("pen", Color.WHITE, 200), "PEN FIGHT", "2-4 players", Vector2(940, 220), 96)
-	pens.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": "penfight"}))
-	content.add_child(pens)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 36)
+	grid.add_theme_constant_override("v_separation", 36)
+	for g in [["ludo", "LUDO", "board", 0], ["snakes", "SNAKES &
+LADDERS", "ladder", 1], ["cards", "COLOR
+CARDS", "cards", 3],
+			["carrom", "CARROM", "carrom", 2], ["penfight", "PEN FIGHT", "pen", -1]]:
+		var color: Color = UI.ACCENT if g[3] < 0 else UI.COLORS[g[3]]
+		var card := UI.card_tile(color, UI.icon(g[2], UI.ink_on(color), 210), g[1])
+		card.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": g[0]}))
+		grid.add_child(card)
+	content.add_child(grid)

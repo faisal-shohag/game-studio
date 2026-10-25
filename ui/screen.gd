@@ -21,16 +21,24 @@ func _ready() -> void:
 	top.add_theme_constant_override("separation", 20)
 	col.add_child(top)
 	if show_back:
-		var b := UI.button("", UI.INK.lightened(0.3), Vector2(130, 130))
-		var arrow := UI.icon("back", Color.WHITE, 110)
-		arrow.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-		arrow.offset_bottom = -10
-		b.add_child(arrow)
+		var b := UI.icon_button("back", 130)
 		b.pressed.connect(UI.back)
 		top.add_child(b)
-	var heading := UI.label(title, 80)
+	# title in an orange tab hanging from the top edge
+	var heading := CenterContainer.new()
 	heading.size_flags_horizontal = SIZE_EXPAND_FILL
-	heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	heading.size_flags_vertical = SIZE_SHRINK_BEGIN
+	if title != "":
+		var tab := PanelContainer.new()
+		var style := UI.box(UI.ACCENT, 12, 44)
+		style.corner_radius_top_left = 0
+		style.corner_radius_top_right = 0
+		style.expand_margin_top = 90  # reaches past the safe-area margin to the screen edge
+		style.content_margin_left = 44
+		style.content_margin_right = 44
+		tab.add_theme_stylebox_override("panel", style)
+		tab.add_child(UI.label_on(UI.ACCENT, title, 64))
+		heading.add_child(tab)
 	top.add_child(heading)
 	if show_back:
 		var spacer := Control.new()  # keeps the title centered
