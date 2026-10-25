@@ -21,6 +21,47 @@ const ANIMALS := ["Tiger", "Panda", "Fox", "Lion", "Owl", "Shark", "Koala", "Eag
 
 signal _dialog_closed(yes: bool)
 
+
+## Behind every screen: faint wood grain and a few leaves peeking in at the bottom corners.
+class Decor extends Control:
+	func _ready() -> void:
+		resized.connect(queue_redraw)
+
+	func _draw() -> void:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 7  # same grain every time
+		var grain := Color(UI.INK, 0.05)
+		for i in 16:
+			var y := rng.randf() * size.y
+			var amp := rng.randf_range(4, 14)
+			var freq := rng.randf_range(0.004, 0.01)
+			var pts := PackedVector2Array()
+			for x in range(-20, int(size.x) + 40, 40):
+				pts.append(Vector2(x, y + sin(x * freq + i) * amp))
+			draw_polyline(pts, grain, rng.randf_range(2, 4), true)
+		for k in 3:  # knots
+			var at := Vector2(rng.randf() * size.x, rng.randf() * size.y)
+			for r in [10, 20, 30]:
+				draw_set_transform(at, 0.0, Vector2(2.2, 1))
+				draw_arc(Vector2.ZERO, r, 0, TAU, 32, grain, 3, true)
+		draw_set_transform(Vector2.ZERO)
+		for l in [[Vector2(-10, size.y - 120), -0.5], [Vector2(40, size.y - 30), -1.1],
+				[Vector2(size.x + 10, size.y - 150), PI + 0.5], [Vector2(size.x - 50, size.y - 20), PI + 1.0]]:
+			_leaf(l[0], l[1], 150.0)
+
+	## A leaf from its stem at `at`, pointing along `angle`.
+	func _leaf(at: Vector2, angle: float, length: float) -> void:
+		var pts := PackedVector2Array()
+		for i in 17:  # two arcs meeting at the tip
+			var t := i / 16.0
+			pts.append(Vector2(t * length, sin(t * PI) * length * 0.28))
+		for i in range(15, 0, -1):
+			var t := i / 16.0
+			pts.append(Vector2(t * length, -sin(t * PI) * length * 0.28))
+		var xf := Transform2D(angle, at)
+		draw_colored_polygon(xf * pts, Color("8cc063"))
+		draw_line(xf * Vector2.ZERO, xf * Vector2(length * 0.9, 0), Color("6a9c45"), 4, true)
+
 var settings := ConfigFile.new()
 var history := []  # [what, props] of screens to return to
 var current: Node
@@ -80,6 +121,10 @@ func _ready() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = -1
 	layer.add_child(bg)
+	var decor := Decor.new()
+	decor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	decor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(decor)
 	add_child(layer)
 
 
