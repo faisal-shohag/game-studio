@@ -758,9 +758,9 @@ func _play_event(e: Dictionary) -> void:
 				var marks: Array = desk.scuffs.slice(-30)
 				marks.append([at, randf() * TAU, lerpf(18.0, 46.0, loud)])
 				desk.scuffs = marks
-			Sfx.play("hop", 0.12, lerpf(-22.0, 0.0, loud), _pitch(e.a, e.b))
+			Sfx.play("pen_hit", 0.12, lerpf(-22.0, 0.0, loud), _pitch(e.a, e.b))
 		"edge":
-			Sfx.play("hop", 0.05, -10.0)
+			Sfx.play("pen_hit", 0.05, -12.0)
 		"out":
 			var pen := _pen_in_frame(e.id)
 			var at := desk.to_screen(Vector2(clampf(pen.x, 0.0, Physics.W), clampf(pen.y, 0.0, Physics.H)))

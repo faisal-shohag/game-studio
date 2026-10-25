@@ -57,6 +57,7 @@ func build() -> void:
 	var play := UI.button("LET'S PLAY!" if first else "SAVE", UI.COLORS[1], Vector2(800, 160), 72)
 	play.pressed.connect(_done)
 	content.add_child(play)
+	content.add_child(UI.label("Music: YannZ (CC BY 4.0)  ·  Sounds: Kenney", 30, UI.INK_SOFT))  # CC BY wants a visible credit
 	_refresh()
 
 

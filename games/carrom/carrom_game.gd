@@ -707,7 +707,7 @@ func _play_event(e: Dictionary) -> void:
 				_shaken = true
 				Fx.shake(table, lerpf(8.0, 20.0, clampf((e.speed - HARD_HIT) / 1500.0, 0.0, 1.0)))
 				Input.vibrate_handheld(25)
-			Sfx.play("hop", 0.12, lerpf(-22.0, 0.0, loud) - (6.0 if e.type == "cushion" else 0.0))
+			Sfx.play("clack", 0.12, lerpf(-22.0, 0.0, loud) - (6.0 if e.type == "cushion" else 0.0))
 		"pocket":
 			board.sinking[e.id] = 0.01
 			board.bulge[e.pocket] = 0.0

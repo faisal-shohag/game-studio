@@ -127,7 +127,7 @@ func _deal() -> void:
 			var c: int = colors[(start + 1 + i) % colors.size()]  # dealer's left first
 			dealt -= 1
 			table.pile_count = dealt
-			Sfx.play("hop", 0.15)
+			Sfx.play("card_deal", 0.15)
 			if c == me:
 				mine.append(view.hand[k])
 				hand.set_cards(mine, table.to_global(Table.PILE_AT))
@@ -152,7 +152,7 @@ func _deal() -> void:
 	await first.fly_to(table.spot(first.id), table.tilt(first.id), 0.35, 1.0)
 	table.push(first)
 	table.pile_count = view.pile_count
-	Sfx.play("hop")
+	Sfx.play("card_play")
 
 
 func _build(colors: Array) -> void:
@@ -475,7 +475,7 @@ func _animate(ev: Dictionary, v: Dictionary) -> void:
 	match ev.do:
 		"play":
 			await _fly_play(ev)
-			Sfx.play("hop")
+			Sfx.play("card_play")
 			table.wobble()
 			var k := Rules.kind_of(ev.id)
 			if k == Rules.REVERSE:
@@ -496,8 +496,9 @@ func _animate(ev: Dictionary, v: Dictionary) -> void:
 			elif k == Rules.WILD:
 				_popup(UI.NAMES[ev.top_color] + "!", UI.COLORS[ev.top_color])
 		"draw":
-			Sfx.play("dice")
+			Sfx.play("card_draw")
 			if ev.reshuffled:
+				Sfx.play("shuffle", 0.0)
 				_popup("Shuffle!", UI.COLORS[3])
 			table.pile_count = v.pile_count
 			await _fly_draw(c, ev.n, v)

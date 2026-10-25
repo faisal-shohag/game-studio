@@ -1,0 +1,5 @@
+village.ogg: "lvl 2 (the village)" from Indie Meditations (Minimalist & Cozy Vibes)
+Music by YannZ (Yanni Ziangos) - https://yannz.itch.io
+https://yannz41.itch.io/indie-meditations-free-music-pack
+Licensed CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+Changes: re-encoded from the WAV to a smaller OGG; otherwise unmodified.
