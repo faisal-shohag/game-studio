@@ -15,7 +15,7 @@ run/main_scene="res://ui/boot.tscn"
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.7")
 config/icon="res://assets/brand/icon_192.png"
-boot_splash/bg_color=Color(1, 0.9608, 0.8941, 1)
+boot_splash/bg_color=Color(0.9412, 0.8353, 0.6706, 1)
 boot_splash/image="res://assets/brand/splash.png"
 boot_splash/minimum_display_time=1500
 
