@@ -575,12 +575,11 @@ func _stamp(text: String, color: Color) -> void:
 	var stamp := PanelContainer.new()
 	var style := UI.box(color, 0, 36)
 	style.set_border_width_all(12)
-	style.border_color = Color.WHITE
+	style.border_color = UI.CREAM
 	style.set_content_margin_all(28)
 	style.content_margin_bottom = 20
 	stamp.add_theme_stylebox_override("panel", style)
-	var l := UI.label(text, 120)
-	l.add_theme_constant_override("outline_size", 30)
+	var l := UI.label_on(color, text, 120)
 	stamp.add_child(l)
 	stamp.modulate.a = 0.0
 	hud.add_child(stamp)
@@ -602,7 +601,7 @@ func _stamp(text: String, color: Color) -> void:
 
 func _open_picker(id: int) -> void:
 	_picker = ColorRect.new()
-	_picker.color = Color(0, 0, 0, 0.6)
+	_picker.color = Color(UI.BG_TOP, 0.92)
 	_picker.size = hud.size
 	_picker.mouse_filter = Control.MOUSE_FILTER_STOP
 	_picker.gui_input.connect(func(e: InputEvent):

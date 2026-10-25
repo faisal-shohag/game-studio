@@ -2,7 +2,7 @@
 ## shoulders. Eight looks (0-3 are the card-table seats' own faces), happy or sad.
 ## `center` = middle of the tile, `size` = tile side.
 
-const OUTLINE := Color("23194d")
+const OUTLINE := Color("5a3420")
 const SKIN := [Color("f6c9a4"), Color("c98d62"), Color("f9dcc4"), Color("8e5b3c"),
 	Color("e8b48c"), Color("f3c7a0"), Color("b07850"), Color("f7d2b6")]
 const HAIR := [Color("4a2f22"), Color("1f1b2e"), Color("e8a93c"), Color("7a3b1c"),

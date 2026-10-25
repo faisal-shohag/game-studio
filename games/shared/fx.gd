@@ -3,7 +3,7 @@
 
 ## Big bouncy word centered at height `y` ("Captured!", "Bonus roll!"), then floats up and fades.
 static func popup(hud: Control, text: String, color: Color, y: float, big := false) -> void:
-	var l := UI.label(text, 100 if big else 84)
+	var l := UI.label(text, 100 if big else 84, Color.WHITE)
 	l.add_theme_color_override("font_outline_color", color.darkened(0.45))
 	l.add_theme_constant_override("outline_size", 26)
 	l.size = Vector2(1080, 150)

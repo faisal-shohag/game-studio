@@ -50,7 +50,7 @@ func _ready() -> void:
 	ribbon.size = Vector2(980, 180)
 	ribbon.position = Vector2(50, -260)
 	var winner_text: String = "%s & %s WIN!" % [names[ranking[0]], names[ranking[1]]] if teams else "%s WINS!" % names[winner]
-	var title := UI.label("YOU WIN!" if won else winner_text.to_upper(), 84 if not teams else 64)
+	var title := UI.label_on(UI.COLORS[winner], "YOU WIN!" if won else winner_text.to_upper(), 84 if not teams else 64)
 	title.size = Vector2(980, 160)
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -58,7 +58,7 @@ func _ready() -> void:
 	add_child(ribbon)
 	create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).tween_property(ribbon, "position:y", oy + 150, 0.6)
 	if me != -1 and not won:
-		var sub := UI.label("You finished %s" % PLACE_TEXT[places[ranking.find(me)]], 52, Color(1, 1, 1, 0.9))
+		var sub := UI.label("You finished %s" % PLACE_TEXT[places[ranking.find(me)]], 52, UI.INK_SOFT)
 		sub.size = Vector2(1080, 70)
 		sub.position = Vector2(0, oy + 350)
 		add_child(sub)
@@ -82,7 +82,7 @@ func _ready() -> void:
 		block.position = Vector2(x - 120, floor_y - h)
 		block.pivot_offset = Vector2(120, h)
 		block.scale = Vector2(1, 0)
-		var num := UI.label(str(place + 1), 130)
+		var num := UI.label_on(UI.COLORS[c], str(place + 1), 130)
 		num.size = Vector2(240, minf(h, 200))
 		num.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		block.add_child(num)
@@ -120,14 +120,14 @@ func _ready() -> void:
 	# last place under the podium (4-player games)
 	var y := floor_y + 30
 	if ranking.size() == 4 and not teams:
-		var last := UI.label("4th   %s" % names[ranking[3]], 40, UI.COLORS[ranking[3]].lightened(0.35))
+		var last := UI.label("4th   %s" % names[ranking[3]], 40, UI.COLORS[ranking[3]].darkened(0.3))
 		last.size = Vector2(1080, 56)
 		last.position = Vector2(0, y)
 		add_child(last)
 		y += 70
 	# stats: one row per player, in finishing order
 	for c in ranking:
-		var row := UI.label("%s    %s" % [names[c], stats[c]], 34, UI.COLORS[c].lightened(0.35))
+		var row := UI.label("%s    %s" % [names[c], stats[c]], 34, UI.COLORS[c].darkened(0.3))
 		row.size = Vector2(1080, 50)
 		row.position = Vector2(0, y)
 		add_child(row)
@@ -138,7 +138,7 @@ func _ready() -> void:
 		var star := UI.icon("star", UI.COLORS[2], 90)
 		star.position = Vector2(380, y + 10)
 		add_child(star)
-		var stars := UI.label("+0", 64, UI.COLORS[2], HORIZONTAL_ALIGNMENT_LEFT)
+		var stars := UI.label("+0", 64, UI.ACCENT, HORIZONTAL_ALIGNMENT_LEFT)
 		stars.size = Vector2(300, 100)
 		stars.position = Vector2(485, y + 6)
 		add_child(stars)
@@ -168,8 +168,8 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.03, 0.15, 0.85))
+	draw_rect(Rect2(Vector2.ZERO, size), Color(UI.BG_TOP, 0.94))
 	for i in 12:
 		var a := _ray_angle + i * TAU / 12
 		draw_colored_polygon(PackedVector2Array([_rays_at, _rays_at + Vector2.from_angle(a) * 1600,
-			_rays_at + Vector2.from_angle(a + TAU / 24) * 1600]), Color(1, 1, 1, 0.06))
+			_rays_at + Vector2.from_angle(a + TAU / 24) * 1600]), Color(UI.ACCENT, 0.1))

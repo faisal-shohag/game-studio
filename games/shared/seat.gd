@@ -78,11 +78,6 @@ func _ready() -> void:
 	size = Vector2(PORTRAIT, PORTRAIT)
 	pivot_offset = size / 2
 	mouse_filter = MOUSE_FILTER_IGNORE
-	var label := UI.label(player_name, 34)
-	label.position = Vector2(-45, PORTRAIT + 2)
-	label.size = Vector2(PORTRAIT + 90, 48)
-	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	add_child(label)
 	_catch = UI.button("CATCH!", UI.COLORS[2], Vector2(230, 96), 42)
 	_catch.position = Vector2((PORTRAIT - 230) / 2, -112)
 	_catch.pressed.connect(catch_pressed.emit)
@@ -134,14 +129,14 @@ func _draw() -> void:
 		_draw_fan(_fan_at())
 	if active:
 		var glow := StyleBoxFlat.new()
-		glow.bg_color = Color(UI.COLORS[2], 0.9)
+		glow.bg_color = Color(UI.ACCENT, 0.9)
 		glow.set_corner_radius_all(34)
 		glow.anti_aliasing = true
 		draw_style_box(glow, Rect2(Vector2.ZERO, size).grow(12))
 	if clock >= 0.0:  # runs clockwise from the top round the portrait's rounded square
 		var path := _frame_path(Rect2(Vector2.ZERO, size).grow(20), 40.0)
-		draw_polyline(path, Color(0, 0, 0, 0.35), 10, true)
-		draw_polyline(_part(path, clock), UI.COLORS[0] if clock < 0.25 else Color.WHITE, 10, true)
+		draw_polyline(path, Color(UI.INK, 0.3), 10, true)
+		draw_polyline(_part(path, clock), UI.COLORS[0] if clock < 0.25 else UI.COLORS[1], 10, true)
 	if not Avatar.draw(self, c, PORTRAIT * 0.92, avatar, color, false, happy):
 		FaceArt.draw(self, c, PORTRAIT * 0.92, color, variant, happy)
 	if chip != "":
@@ -156,9 +151,17 @@ func _draw() -> void:
 		pill.set_corner_radius_all(24)
 		pill.anti_aliasing = true
 		draw_style_box(pill, cr)
-		draw_string_outline(UI.FONT, Vector2(cr.position.x, cr.position.y + 33), chip, HORIZONTAL_ALIGNMENT_CENTER, cw, 30, 6, UI.INK)
 		draw_string(UI.FONT, Vector2(cr.position.x, cr.position.y + 33), chip, HORIZONTAL_ALIGNMENT_CENTER, cw, 30, Color.WHITE)
 		draw_set_transform(Vector2.ZERO)
+	# name on a cream pill under the portrait, readable on any table
+	var nw := UI.FONT.get_string_size(player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x + 32
+	var nx := clampf(c.x - nw / 2, 12 - position.x, 1068 - position.x - nw)  # stay on screen
+	var plate := StyleBoxFlat.new()
+	plate.bg_color = UI.CREAM
+	plate.set_corner_radius_all(24)
+	plate.anti_aliasing = true
+	draw_style_box(plate, Rect2(nx, PORTRAIT + 3, nw, 46))
+	draw_string(UI.FONT, Vector2(nx, PORTRAIT + 38), player_name, HORIZONTAL_ALIGNMENT_CENTER, nw, 34, UI.INK)
 	# count badge on the top-right corner; a pill when the text is wide
 	var at := Vector2(PORTRAIT - 6, 8)
 	var text := badge if badge != "" else str(count)

@@ -59,12 +59,14 @@ func _pulse(on: bool) -> void:
 
 
 func _draw() -> void:
-	var bg := UI.box(color if active else UI.INK.lightened(0.25), 10, 36)
+	var bg := UI.box(color if active else UI.CREAM, 10, 36)
 	if active:
 		bg.set_border_width_all(6)
 		bg.border_width_bottom = 14
-		bg.border_color = Color.WHITE
+		bg.border_color = UI.CREAM
 	draw_style_box(bg, Rect2(Vector2.ZERO, size))
+	var ink := UI.ink_on(bg.bg_color)
+	_name.add_theme_color_override("font_color", ink)
 	var av := Vector2(84, size.y / 2 - 6)
 	draw_circle(av, 64, Color.WHITE)
 	draw_circle(av, 58, color.lightened(0.55))
@@ -72,10 +74,7 @@ func _draw() -> void:
 		PawnArt.draw(self, av + Vector2(0, 40), 0.85, color)
 	var text := note if note != "" else status
 	if text != "":
-		draw_string_outline(UI.FONT, Vector2(162, 130), text, HORIZONTAL_ALIGNMENT_LEFT, size.x - 175, 34, 10, UI.INK)
-		draw_string(UI.FONT, Vector2(162, 130), text, HORIZONTAL_ALIGNMENT_LEFT, size.x - 175, 34, Color.WHITE)
+		draw_string(UI.FONT, Vector2(162, 130), text, HORIZONTAL_ALIGNMENT_LEFT, size.x - 175, 34, Color(ink, 0.8))
 	else:
-		for i in 4:
-			var at := Vector2(180 + i * 42, 118)
-			draw_circle(at, 15, UI.INK)
-			draw_circle(at, 11, Color.WHITE if i < home else Color(1, 1, 1, 0.25))
+		for i in 4:  # home dots: filled in the player's color (white on their own color while active)
+			draw_circle(Vector2(180 + i * 42, 118), 14, (ink if active else color) if i < home else Color(ink, 0.18))

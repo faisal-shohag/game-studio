@@ -5,7 +5,7 @@ extends Control
 
 signal tapped
 
-const INK := Color("23194d")
+const INK := Color("5a3420")  # UI.INK; a const so standalone tests run without the autoload
 const PIPS := {
 	1: [Vector2(0, 0)],
 	2: [Vector2(-1, -1), Vector2(1, 1)],
@@ -130,7 +130,7 @@ func _draw() -> void:  # soft shadow that shrinks while the dice is in the air
 static func _face_texture(value: int) -> ImageTexture:
 	var n := 128
 	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
-	img.fill(Color("cfc8ea"))
+	img.fill(Color("e8d5b5"))
 	var inset := 5.0
 	var radius := 24.0
 	for y in n:
@@ -139,7 +139,7 @@ static func _face_texture(value: int) -> ImageTexture:
 			if Vector2(x + 0.5, y + 0.5).distance_to(q) <= radius:
 				img.set_pixel(x, y, Color.WHITE)
 	var pip_r := 17.0 if value == 1 else 11.0
-	var pip_color := Color("ff4757") if value == 1 else INK
+	var pip_color := Color("f25c54") if value == 1 else INK
 	for p in PIPS[value]:
 		var c: Vector2 = Vector2(n, n) / 2 + p * 32.0
 		for y in range(int(c.y - pip_r) - 1, int(c.y + pip_r) + 2):

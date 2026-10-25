@@ -12,7 +12,7 @@ const FaceArt = preload("res://games/shared/face_art.gd")
 const Avatar = preload("res://core/avatar.gd")
 const Fx = preload("res://games/shared/fx.gd")
 const PLACE_TEXT := ["1st", "2nd", "3rd", "4th"]
-const MEDALS := [Color("ffc312"), Color("c8d1e0"), Color("e08a4c"), Color("8c87b8")]
+const MEDALS := [Color("ffc312"), Color("c8d1e0"), Color("e08a4c"), Color("b49a7a")]
 const REWARD := [100, 50, 25, 10]  # cosmetic stars, as WinOverlay
 
 var ranking := []  # colors, winner first
@@ -45,7 +45,7 @@ class ResultCard extends Control:
 		rim.anti_aliasing = true
 		draw_style_box(rim, r)
 		var face := rim.duplicate()
-		face.bg_color = Color.WHITE
+		face.bg_color = UI.CREAM
 		face.set_corner_radius_all(int(24 * s))
 		draw_style_box(face, r.grow(-8 * s))
 		var band := face.duplicate()
@@ -63,8 +63,7 @@ class ResultCard extends Control:
 		CardArt.text(self, str(place + 1), m, 34 * s)
 		var fs := int(34 * s)
 		var name_y := 200 * s
-		draw_string_outline(UI.FONT, Vector2(10 * s, name_y), player_name, HORIZONTAL_ALIGNMENT_CENTER, size.x - 20 * s, fs, int(8 * s), UI.INK)
-		draw_string(UI.FONT, Vector2(10 * s, name_y), player_name, HORIZONTAL_ALIGNMENT_CENTER, size.x - 20 * s, fs, Color.WHITE)
+		draw_string(UI.FONT, Vector2(10 * s, name_y), player_name, HORIZONTAL_ALIGNMENT_CENTER, size.x - 20 * s, fs, UI.INK)
 		# leftover cards by kind
 		var rows := [["Numbers", 14, 0], ["Actions", 69, 0], ["Wilds", 100, 0]]
 		for id in hand:
@@ -102,7 +101,7 @@ func _ready() -> void:
 	ribbon.add_theme_stylebox_override("panel", style)
 	ribbon.size = Vector2(980, 170)
 	ribbon.position = Vector2(50, -260)
-	var title := UI.label("YOU WIN!" if won else "%s WINS!" % names[winner].to_upper(), 80)
+	var title := UI.label_on(UI.COLORS[winner], "YOU WIN!" if won else "%s WINS!" % names[winner].to_upper(), 80)
 	title.size = Vector2(980, 150)
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -110,7 +109,7 @@ func _ready() -> void:
 	add_child(ribbon)
 	create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).tween_property(ribbon, "position:y", oy + 90, 0.6)
 	if me != -1 and not won:
-		var sub := UI.label("You finished %s" % PLACE_TEXT[ranking.find(me)], 48, Color(1, 1, 1, 0.9))
+		var sub := UI.label("You finished %s" % PLACE_TEXT[ranking.find(me)], 48, UI.INK_SOFT)
 		sub.size = Vector2(1080, 64)
 		sub.position = Vector2(0, oy + 275)
 		add_child(sub)
@@ -146,7 +145,7 @@ func _ready() -> void:
 		var star := UI.icon("star", UI.COLORS[2], 90)
 		star.position = Vector2(380, y)
 		add_child(star)
-		var stars := UI.label("+0", 64, UI.COLORS[2], HORIZONTAL_ALIGNMENT_LEFT)
+		var stars := UI.label("+0", 64, UI.ACCENT, HORIZONTAL_ALIGNMENT_LEFT)
 		stars.size = Vector2(300, 100)
 		stars.position = Vector2(485, y - 4)
 		add_child(stars)
@@ -173,8 +172,8 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.03, 0.15, 0.88))
+	draw_rect(Rect2(Vector2.ZERO, size), Color(UI.BG_TOP, 0.94))
 	for i in 12:
 		var a := _ray_angle + i * TAU / 12
 		draw_colored_polygon(PackedVector2Array([_rays_at, _rays_at + Vector2.from_angle(a) * 1600,
-			_rays_at + Vector2.from_angle(a + TAU / 24) * 1600]), Color(1, 1, 1, 0.06))
+			_rays_at + Vector2.from_angle(a + TAU / 24) * 1600]), Color(UI.ACCENT, 0.1))

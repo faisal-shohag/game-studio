@@ -159,7 +159,7 @@ func _build(colors: Array) -> void:
 	status.size = Vector2(860, 56)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status.add_theme_font_size_override("font_size", 34)
-	status.add_theme_color_override("font_color", Color(1, 1, 1, 0.8))
+	status.add_theme_color_override("font_color", UI.INK_SOFT)
 	hud.add_child(status)
 	var back := UI.icon_button("back", 120)
 	back.position = Vector2(30, 50)

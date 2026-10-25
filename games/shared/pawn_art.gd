@@ -1,7 +1,7 @@
 ## Classic Ludo pin drawn with polygons. Shared by menu icons and (phase 2) the board.
 ## `foot` = bottom center on the ground, `s` = scale (pawn is ~95 * s tall).
 
-const OUTLINE := Color("23194d")
+const OUTLINE := Color("5a3420")
 
 
 static func ellipse(center: Vector2, rx: float, ry: float, n := 28) -> PackedVector2Array:

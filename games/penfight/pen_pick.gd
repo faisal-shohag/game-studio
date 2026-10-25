@@ -24,7 +24,7 @@ func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_STOP  # the desk underneath doesn't react
 	var oy := maxf(0.0, (size.y - 1920.0) / 2)
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.62)
+	dim.color = Color(UI.BG_TOP, 0.92)
 	dim.size = size
 	dim.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(dim)
@@ -35,14 +35,14 @@ func _ready() -> void:
 	add_child(_head)
 	for k in Physics.TYPES.size():
 		var type: String = Physics.TYPES[k]
-		var card := UI.button("", UI.INK.lightened(0.25), CARD)
+		var card := UI.button("", UI.CREAM, CARD)
 		card.position = Vector2(40 + (k % 2) * (CARD.x + 40), oy + 450 + (k / 2) * (CARD.y + 40))
 		card.size = CARD
 		if type == chosen:
 			var ring := card.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
 			ring.set_border_width_all(8)
 			ring.border_width_bottom = 14
-			ring.border_color = UI.COLORS[2]
+			ring.border_color = UI.ACCENT
 			card.add_theme_stylebox_override("normal", ring)
 		var art := Control.new()
 		art.size = CARD
@@ -73,16 +73,15 @@ func _draw_card(art: Control, type: String) -> void:
 	var k := Physics.TYPES.find(type)
 	var bob := sin(Time.get_ticks_msec() / 260.0 + k * 1.3) * 7.0
 	Desk.draw_pen(art, Vector2(CARD.x / 2, 110 + bob), -0.12, type, color, 1.0, 0.0, 1.35)
-	art.draw_string_outline(UI.FONT, Vector2(0, 250), p.name.to_upper(), HORIZONTAL_ALIGNMENT_CENTER, CARD.x, 60, 14, UI.INK)
-	art.draw_string(UI.FONT, Vector2(0, 250), p.name.to_upper(), HORIZONTAL_ALIGNMENT_CENTER, CARD.x, 60, Color.WHITE)
-	art.draw_string(UI.FONT, Vector2(0, 300), BLURB[type], HORIZONTAL_ALIGNMENT_CENTER, CARD.x, 34, Color(1, 1, 1, 0.75))
+	art.draw_string(UI.FONT, Vector2(0, 250), p.name.to_upper(), HORIZONTAL_ALIGNMENT_CENTER, CARD.x, 60, UI.INK)
+	art.draw_string(UI.FONT, Vector2(0, 300), BLURB[type], HORIZONTAL_ALIGNMENT_CENTER, CARD.x, 34, UI.INK_SOFT)
 	for i in STATS.size():
 		var y := 345.0 + i * 54
-		art.draw_string(UI.FONT, Vector2(36, y + 12), STATS[i][0], HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color.WHITE)
+		art.draw_string(UI.FONT, Vector2(36, y + 12), STATS[i][0], HORIZONTAL_ALIGNMENT_LEFT, -1, 34, UI.INK)
 		var bar := Rect2(176, y - 12, CARD.x - 176 - 36, 26)
 		var fill := bar
 		fill.size.x *= stat(type, STATS[i][1])
-		art.draw_rect(bar, Color(0, 0, 0, 0.3))
+		art.draw_rect(bar, Color(UI.INK, 0.15))
 		art.draw_rect(fill, UI.COLORS[[0, 3, 1, 2][i]])
 
 

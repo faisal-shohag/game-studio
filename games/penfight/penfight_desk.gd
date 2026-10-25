@@ -266,7 +266,7 @@ static func draw_pen(ci: CanvasItem, at: Vector2, angle: float, type: String, co
 	_capsule(ci, -h, h, r + 1, Color(0, 0, 0, 0.3 * alpha * (1.0 - lift * 0.5)))
 	ci.draw_set_transform(at, angle, Vector2(scale, scale))
 	var a := func(c: Color) -> Color: return Color(c, c.a * alpha)
-	var ink: Color = Color("23194d")
+	var ink: Color = Color("5a3420")
 	match type:
 		"gel":
 			_tip(ci, h - 22, h, r * 0.75, a.call(CHROME), a.call(ink))
