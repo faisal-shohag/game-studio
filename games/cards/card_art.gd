@@ -2,11 +2,11 @@
 ## origin of `xf` onto any CanvasItem, so cards, piles, fans and icons share it.
 ##
 ## Face: white rim, colored body (dark for wilds), a ringed medallion with the big symbol, corner
-## indices. Wilds show four colored quadrants. Back: purple with a faint "GS" pattern and a badge.
+## indices. Wilds show four colored quadrants. Back: orange with a faint "GS" pattern and a badge.
 
 const Rules = preload("res://games/cards/cards_rules.gd")
 const SIZE := Vector2(170, 250)
-const BACK := Color("5b3fd6")
+const BACK := Color("e8743b")
 
 
 static func draw(ci: CanvasItem, id: int, face_up: bool, xf := Transform2D.IDENTITY, lift := 0.0) -> void:

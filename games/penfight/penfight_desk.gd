@@ -1,6 +1,6 @@
 ## Pen Fight desk drawn in code: a wooden school-desk top with warm grain, rounded edges and a
 ## darker bevel, a pencil groove along the top, old doodles and scratches (a heart, initials,
-## tic-tac-toe, a compass-scratch circle), a faint ink stain, and the dark floor round it; then
+## tic-tac-toe, a compass-scratch circle), a faint ink stain, and the warm floor round it; then
 ## the pens and the aim on top. Local coordinates are desk units minus the desk center, so the
 ## top spans -500..500 across and -700..700 down. The desk never turns.
 extends Node2D
@@ -11,7 +11,7 @@ const LIP := 18.0  # bevel round the top
 const WOOD := Color("d39a5e")
 const WOOD_DARK := Color("8a5530")
 const BEVEL := Color("a86b3a")
-const FLOOR := Color("221a17")
+const FLOOR := Color("efd7ad")
 const CARVE := Color(0.32, 0.17, 0.07, 0.42)  # scratched into the wood
 const GRAPHITE := Color(0.25, 0.25, 0.3, 0.38)
 const CHROME := Color("c9ced6")

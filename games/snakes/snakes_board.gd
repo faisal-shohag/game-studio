@@ -6,9 +6,9 @@ extends Node2D
 const Rules = preload("res://games/snakes/snakes_rules.gd")
 const CELL := 102.0
 const HALF := CELL * 5  # board is 1020 x 1020
-const TILES := [Color("fff4e0"), Color("ffe1c2"), Color("e6f7ff"), Color("d6ecff"), Color("eafbe9"), Color("d4f5d2")]
+const TILES := [Color("fff5e4"), Color("fbe3c2"), Color("fdebd8"), Color("f7d3bd"), Color("fdf2cf"), Color("f4dfa6")]
 const WOOD := Color("c98b4b")
-const SNAKE_COLORS := [Color("2ed573"), Color("ff6b81"), Color("a55eea"), Color("ffa502"), Color("1e90ff")]
+const SNAKE_COLORS := [Color("6cc551"), Color("ff7a9c"), Color("a77be0"), Color("f59a3c"), Color("4aa3ff")]
 
 
 ## Center of square n (1..100) in board coords.
@@ -82,11 +82,7 @@ func _ready() -> void:
 
 func _draw() -> void:
 	# frame + squares
-	var frame := UI.box(Color.WHITE, 0, 28)
-	frame.border_color = UI.INK
-	frame.set_border_width_all(10)
-	frame.shadow_size = 12
-	draw_style_box(frame, Rect2(-HALF - 14, -HALF - 14, HALF * 2 + 28, HALF * 2 + 28))
+	UI.draw_frame(self, Rect2(-HALF - 18, -HALF - 18, HALF * 2 + 36, HALF * 2 + 36), 14.0, 36)
 	for n in range(1, Rules.FINISH + 1):
 		var p := square_pos(n)
 		var row := (n - 1) / 10

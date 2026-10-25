@@ -408,6 +408,25 @@ func pulse(c: Control) -> Tween:
 	return tw
 
 
+## Board frame from the reference: soft orange glow, orange rim with a darker lip, cream inside
+## `inset` pixels in.
+func draw_frame(ci: CanvasItem, r: Rect2, inset := 18.0, radius := 44) -> void:
+	for k in 3:
+		var glow := StyleBoxFlat.new()
+		glow.bg_color = Color(ACCENT, 0.12)
+		glow.set_corner_radius_all(radius + 30 - k * 10)
+		glow.anti_aliasing = true
+		ci.draw_style_box(glow, r.grow(30 - k * 10))
+	var rim := box(ACCENT, 10, radius)
+	rim.anti_aliasing = true
+	ci.draw_style_box(rim, r)
+	var inner := StyleBoxFlat.new()
+	inner.bg_color = CREAM
+	inner.set_corner_radius_all(maxi(radius - int(inset), 8))
+	inner.anti_aliasing = true
+	ci.draw_style_box(inner, r.grow(-inset))
+
+
 func _make_theme() -> Theme:
 	var t := Theme.new()
 	t.default_font = FONT

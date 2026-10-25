@@ -60,11 +60,9 @@ func _square(at: Vector2) -> Rect2:
 
 func _draw() -> void:
 	var board := Rect2(_corner(0, 0), Vector2(15, 15) * CELL)
-	draw_style_box(_rounded(Color(0, 0, 0, 0.3), 50), Rect2(board.position + Vector2(0, 22), board.size).grow(18))
-	draw_style_box(_rounded(UI.INK, 50), board.grow(18))
-	draw_style_box(_rounded(Color("f4f1ff"), 32), board.grow(4))
+	UI.draw_frame(self, board.grow(22))
 
-	var cell := _rounded(Color.WHITE, 12, Color("dcd6f7"), 2)
+	var cell := _rounded(Color("fffaf0"), 12, Color("ead8b8"), 2)
 	for sq in track:
 		draw_style_box(cell, _square(cell_center(Vector2(sq))))
 	for c in 4:
@@ -79,14 +77,14 @@ func _draw() -> void:
 		var corner: Vector2 = BASE_CORNER[c]
 		var base := Rect2(_corner(corner.x, corner.y), Vector2(6, 6) * CELL).grow(-5)
 		draw_style_box(_rounded(col, 30, col.darkened(0.25), 0, 10), base)
-		draw_style_box(_rounded(Color.WHITE, 24, Color("dcd6f7"), 0, 6), base.grow(-CELL * 0.8))
+		draw_style_box(_rounded(Color("fffaf0"), 24, Color("ead8b8"), 0, 6), base.grow(-CELL * 0.8))
 		for spot in BASE_SPOT:
 			var at := cell_center(corner + spot - Vector2(0.5, 0.5))
 			draw_circle(at, CELL * 0.44, col.darkened(0.2))
 			draw_circle(at + Vector2(0, 3), CELL * 0.38, col.lightened(0.55))
 	for sq in Rules.SAFE:
 		if not sq in Rules.START:
-			_star(cell_center(Vector2(track[sq])), CELL * 0.33, Color("cfc8f2"))
+			_star(cell_center(Vector2(track[sq])), CELL * 0.33, Color("e6cfa6"))
 
 	# home: four triangles meeting at a gold star
 	var a := _corner(6, 6)
