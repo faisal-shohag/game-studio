@@ -18,7 +18,7 @@ func _init() -> void:
 func build() -> void:
 	content.add_child(UI.label("How many players?", 52))
 	var faces: bool = Games.LIST[game].faces
-	for n in ([2, 4] if variant == "classic" else [2, 3, 4]):  # Classic is 1v1 or 2v2
+	for n in ([2, 4] if variant == "classic" else Games.LIST[game].get("players", [2, 3, 4])):  # Classic is 1v1 or 2v2
 		var t := UI.tile(UI.COLORS[n - 1], UI.icon("faces" if faces else "pawns", Color.WHITE, 240, n), "%d PLAYERS" % n, "", Vector2(900, 240), 80)
 		if faces:
 			t.pressed.connect(UI.go.bind(Games.LIST[game].scene, _face_props(n)))

@@ -175,6 +175,32 @@ func _draw() -> void:
 			var s := u * 0.3
 			PenDesk.draw_pen(self, c + Vector2(-2, 6) * u, -0.75, "marker", UI.COLORS[3], 1.0, 0.0, s)
 			PenDesk.draw_pen(self, c + Vector2(2, -4) * u, 0.75 + PI, "gel", UI.COLORS[0], 1.0, 0.0, s)
+		"sholo":  # a square with its diagonals and a triangle on top, a few beads on the points
+			var g := 22 * u
+			var o := c + Vector2(0, 14) * u
+			var line := Color(ink, 0.7)
+			for k in 3:
+				draw_line(o + Vector2(-g, (k - 1) * g), o + Vector2(g, (k - 1) * g), line, 4 * u, true)
+				draw_line(o + Vector2((k - 1) * g, -g), o + Vector2((k - 1) * g, g), line, 4 * u, true)
+			draw_line(o + Vector2(-g, -g), o + Vector2(g, g), line, 4 * u, true)
+			draw_line(o + Vector2(g, -g), o + Vector2(-g, g), line, 4 * u, true)
+			draw_line(o + Vector2(0, -g), o + Vector2(-g, -2.4 * g), line, 4 * u, true)
+			draw_line(o + Vector2(0, -g), o + Vector2(g, -2.4 * g), line, 4 * u, true)
+			draw_line(o + Vector2(-g, -2.4 * g), o + Vector2(g, -2.4 * g), line, 4 * u, true)
+			for bead in [[Vector2(-1, 1), 0], [Vector2(0, 1), 0], [Vector2(1, 0), 0], [Vector2(-1, -1), 3], [Vector2(0, -1), 3], [Vector2(-1, -2.4), 3]]:
+				var at: Vector2 = o + bead[0] * g
+				draw_circle(at, 10 * u, UI.COLORS[bead[1]].darkened(0.35))
+				draw_circle(at, 7.5 * u, UI.COLORS[bead[1]])
+		"dots":  # 3x3 dots, a few lines and one closed box
+			var g := 30 * u
+			var o := c - Vector2(g, g)
+			draw_rect(Rect2(o + Vector2(4, 4) * u, Vector2(g, g) - Vector2(8, 8) * u), UI.COLORS[3].lightened(0.25))
+			for l in [[Vector2(0, 0), Vector2(1, 0), 3], [Vector2(0, 0), Vector2(0, 1), 3], [Vector2(1, 0), Vector2(1, 1), 3],
+					[Vector2(0, 1), Vector2(1, 1), 3], [Vector2(1, 1), Vector2(2, 1), 0], [Vector2(2, 1), Vector2(2, 2), 0]]:
+				draw_line(o + l[0] * g, o + l[1] * g, UI.COLORS[l[2]].darkened(0.2), 7 * u, true)
+			for y in 3:
+				for x in 3:
+					draw_circle(o + Vector2(x, y) * g, 6 * u, ink)
 		"board":
 			var b := Rect2(c - Vector2(42, 42) * u, Vector2(84, 84) * u)
 			draw_rect(b.grow(4 * u), ink)

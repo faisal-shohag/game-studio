@@ -41,6 +41,8 @@ func build() -> void:
 	status = UI.label("", 50)
 	content.add_child(status)
 	info = UI.label("", 36, UI.INK_SOFT)
+	if hosting and _max_players() == 2:  # 1v1 games: you and a bot facing each other
+		owners = [1, -1, 0, -1]
 	if hosting:  # the QR friends scan, with the room details beside it
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 34)
@@ -182,7 +184,7 @@ func _on_peer_joined(id: int) -> void:
 	if not hosting:
 		return
 	var free := owners.find(0)
-	if free == -1:
+	if free == -1 and 4 - owners.count(-1) < _max_players():
 		free = owners.find(-1)
 	if free == -1:  # room full
 		multiplayer.multiplayer_peer.disconnect_peer(id)
@@ -224,9 +226,15 @@ func _announce(text: String, joined: bool) -> void:
 	Sfx.play("home" if joined else "no_move", 0.0)
 
 
+func _max_players() -> int:
+	return Games.LIST[game].get("players", [2, 3, 4]).max()
+
+
 ## Host toggles empty seats between Bot and Off.
 func _cycle(c: int) -> void:
 	if hosting and owners[c] <= 0:
+		if owners[c] == -1 and 4 - owners.count(-1) >= _max_players():
+			return
 		owners[c] = -1 if owners[c] == 0 else 0
 		_sync.rpc(game, variant, rounds, owners, names, avatars)
 
@@ -270,9 +278,11 @@ func _refresh() -> void:
 	_shown_owners = owners.duplicate()
 	start.visible = hosting
 	var playing := 4 - owners.count(-1)
-	var ready := playing >= 2 and (variant != "classic" or playing != 3)  # Classic: 1v1 or 2v2
+	var counts: Array = Games.LIST[game].get("players", [2, 3, 4])
+	var ready := playing in counts and (variant != "classic" or playing != 3)  # Classic: 1v1 or 2v2
 	start.disabled = not ready
-	start.text = "2 OR 4 PLAYERS" if variant == "classic" and playing == 3 else "START"
+	start.text = ("2 OR 4 PLAYERS" if variant == "classic" and playing == 3
+		else "%d PLAYERS" % counts.max() if playing > counts.max() else "START")
 	if ready and hosting and _pulse == null:
 		_pulse = UI.pulse(start)
 	elif not ready and _pulse:

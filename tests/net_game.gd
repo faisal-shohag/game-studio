@@ -15,6 +15,8 @@
 ## Pen Fight: each phone picks a random pen, then flicks random legal flicks for its seat (Real-time:
 ## whenever its cooldown allows); FINAL compares round wins, winners, which pens are out and each
 ## seat's flicks (the guest's must be there: its flicks reached the host).
+## Sholo Guti / Dots & Boxes: each phone plays random legal moves for its seat (Sholo sometimes
+## stops a jump chain); FINAL compares the whole board.
 extends Node
 
 
@@ -22,7 +24,7 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	var hosting := "host" in args
 	var game_id := "ludo"
-	for g in ["snakes", "cards", "carrom", "penfight"]:
+	for g in ["snakes", "cards", "carrom", "penfight", "sholo", "dots"]:
 		if g in args:
 			game_id = g
 	Engine.time_scale = 20
@@ -105,6 +107,15 @@ func _ready() -> void:
 		var s: Dictionary = game.state
 		if s.phase == "over":
 			break
+		if game_id in ["sholo", "dots"]:
+			if game._my_turn():
+				if game_id == "dots":
+					game._intent(game.Rules.legal(s).pick_random())
+				elif s.phase == "chain" and randf() < 0.3:
+					game._intent("done", 0)
+				else:
+					game._intent("move", game.Rules.legal_moves(s).pick_random())
+			continue
 		if game.busy or game.waiting_host or game.seats[s.turn] != "human":
 			continue
 		if s.phase == "roll":
@@ -151,4 +162,5 @@ func _board(game: Node) -> Array:
 		var v: Dictionary = game.view
 		return [v.get("phase"), v.get("discard", [-1]).back(), v.get("counts"), v.get("winners")]
 	var s: Dictionary = game.state
-	return [s.phase, s.tokens if s.has("tokens") else s.pos, s.winners]
+	var board: Array = s.tokens if s.has("tokens") else s.board if s.has("board") else s.lines if s.has("lines") else s.pos
+	return [s.phase, board, s.winners]

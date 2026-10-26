@@ -47,13 +47,15 @@ func build() -> void:
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 36)
-	grid.add_theme_constant_override("v_separation", 36)
+	grid.add_theme_constant_override("v_separation", 30)
 	for g in [["ludo", "LUDO", "board", 0], ["snakes", "SNAKES &
 LADDERS", "ladder", 1], ["cards", "COLOR
 CARDS", "cards", 3],
-			["carrom", "CARROM", "carrom", 2], ["penfight", "PEN FIGHT", "pen", -1]]:
+			["carrom", "CARROM", "carrom", 2], ["penfight", "PEN FIGHT", "pen", -1],
+			["sholo", "SHOLO GUTI", "sholo", 2], ["dots", "DOTS &
+BOXES", "dots", 1]]:
 		var color: Color = UI.ACCENT if g[3] < 0 else UI.COLORS[g[3]]
-		var card := UI.card_tile(color, UI.icon(g[2], UI.ink_on(color), 210), g[1])
+		var card := UI.card_tile(color, UI.icon(g[2], UI.ink_on(color), 150), g[1], Vector2(470, 310), 52)  # 4 rows fit the screen
 		card.pressed.connect(UI.go.bind("res://ui/screens/game_mode.gd", {"game": g[0]}))
 		grid.add_child(card)
 	content.add_child(grid)
