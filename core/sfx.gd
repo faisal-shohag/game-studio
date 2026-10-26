@@ -19,14 +19,11 @@ const SOUNDS := {
 	"clack": ["clack_1", "clack_2", "clack_3", "clack_4"],
 	"pen_hit": ["pen_hit_1", "pen_hit_2", "pen_hit_3"],
 }
-const MUSIC := "res://assets/music/village.ogg"  # YannZ, CC BY 4.0 (see assets/music/LICENSE.txt)
-const MUSIC_DB := -14.0
 const POOL := 8  # overlapping sounds (hops + dice + taps)
 
 var muted := false
 var _streams := {}
 var _players: Array[AudioStreamPlayer] = []
-var _music := AudioStreamPlayer.new()
 
 
 func _ready() -> void:
@@ -37,12 +34,6 @@ func _ready() -> void:
 		var p := AudioStreamPlayer.new()
 		add_child(p)
 		_players.append(p)
-	add_child(_music)
-	if ResourceLoader.exists(MUSIC):
-		_music.stream = load(MUSIC)
-		_music.stream.loop = true
-		_music.volume_db = MUSIC_DB
-		_music.playing = not muted
 
 
 func play(key: String, pitch_jitter := 0.06, volume_db := 0.0, pitch := 1.0) -> void:
@@ -61,7 +52,5 @@ func play(key: String, pitch_jitter := 0.06, volume_db := 0.0, pitch := 1.0) -> 
 
 func set_muted(v: bool) -> void:
 	muted = v
-	if _music.stream:
-		_music.playing = not v
 	UI.settings.set_value("audio", "muted", v)
 	UI.settings.save(UI.SETTINGS_PATH)
