@@ -1,24 +1,25 @@
-## Carrom board drawn in code: a thick wooden frame round a light plywood surface, corner pockets
-## with nets, baselines with red circles, diagonal arrows and the center rosette; then the coins,
-## the striker and the aim guide on top. Local coordinates are board units minus 500, so the
-## playing area spans -500..500 and the node's position is the board center. Rotate the node by
-## a quarter turn per seat to put that seat at the bottom.
+## Carrom board drawn in code: an orange lacquered frame with corner brackets round a honey wood
+## surface, deep corner pockets, capsule baselines with colored circles, spear arrows and a compass
+## rose in the center; then the coins, the striker and the aim guide on top. Local coordinates are
+## board units minus 500, so the playing area spans -500..500 and the node's position is the board
+## center. Rotate the node by a quarter turn per seat to put that seat at the bottom.
 extends Node2D
 
 const Physics = preload("res://games/carrom/carrom_physics.gd")
 const HALF := 500.0
 const FRAME := 40.0
-const WOOD := Color("6b3a1f")
-const WOOD_DARK := Color("4a2512")
-const PLY := Color("f2dcaa")
-const LINE := Color("3b2414")
-const RED := Color("a0523d")  # board markings: a muted brick, so the queen stands out
+const WOOD := Color("d4622e")  # orange lacquer
+const WOOD_DARK := Color("9c3d18")
+const PLY := Color("eec088")  # honey
+const PLY_CENTER := Color("f8dcaa")
+const LINE := Color("c8763f")  # board markings: soft orange-brown, so the queen stands out
+const RED := Color("d65a33")  # side baseline circles
+const BASE_GREEN := Color("7d8c5a")  # top and bottom baseline circles
 const IVORY := Color("f4ecd6")
 const EBONY := Color("2a201c")
 const QUEEN_RED := Color("ff1f4b")
 const QUEEN_RIM := Color("f5b82e")  # gold
 const STRIKER := Color("e9f0fb")
-const STRIKER_RING := Color("2f6bd8")
 const KIND_COLORS := [IVORY, EBONY, QUEEN_RED, STRIKER]
 
 ## Coins on the board: {id, kind, x, y} in board units (0..1000).
@@ -50,7 +51,6 @@ var aim := {}:
 		aim = v
 		queue_redraw()
 var _grain := []  # [points, color, width] plywood streaks
-var _frame_grain := []
 
 
 func _ready() -> void:
@@ -65,12 +65,7 @@ func _ready() -> void:
 		for i in 41:
 			var x := -HALF + i * 25.0
 			pts.append(Vector2(x, y + sin(x * freq + ph) * amp))
-		_grain.append([pts, Color(0.55, 0.36, 0.16, rng.randf_range(0.05, 0.13)), rng.randf_range(1.5, 4.0)])
-	for side in 4:
-		for k in 7:
-			var off := rng.randf_range(4, FRAME - 4)
-			var col := WOOD_DARK.lerp(Color("8a4d27"), rng.randf())
-			_frame_grain.append([side, off, col, rng.randf_range(1.5, 4.0)])
+		_grain.append([pts, Color(0.6, 0.35, 0.12, rng.randf_range(0.04, 0.09)), rng.randf_range(1.5, 4.0)])
 
 
 ## Global position of a board point (follows the node's rotation).
@@ -95,10 +90,10 @@ func _draw() -> void:
 		_draw_aim()
 	for i in trail.size():
 		var f := (i + 1.0) / (trail.size() + 1.0)
-		draw_circle(trail[i] - Vector2(HALF, HALF), Physics.STRIKER_R * (0.35 + 0.55 * f), Color(STRIKER_RING.lightened(0.4), 0.28 * f))
+		draw_circle(trail[i] - Vector2(HALF, HALF), Physics.STRIKER_R * (0.35 + 0.55 * f), Color(QUEEN_RIM, 0.3 * f))
 	if not striker.is_empty():
 		var at := Vector2(striker.x, striker.y) - Vector2(HALF, HALF)
-		draw_piece(self, at, Physics.STRIKER, striker_spin, 1.0, 1.0, striker_bad)
+		draw_piece(self, at, Physics.STRIKER, striker_spin, 1.0, 1.0, striker_bad, true)
 
 
 func _draw_frame() -> void:
@@ -109,104 +104,176 @@ func _draw_frame() -> void:
 	draw_style_box(shadow, outer.grow(6).grow_individual(0, 0, 0, 10))
 	var wood := StyleBoxFlat.new()
 	wood.bg_color = WOOD
+	wood.border_color = WOOD_DARK
+	wood.set_border_width_all(3)
 	wood.set_corner_radius_all(22)
 	wood.anti_aliasing = true
 	draw_style_box(wood, outer)
-	for g in _frame_grain:  # grain bands running along each side
-		var off: float = -HALF - FRAME + g[1]
-		var a := Vector2(-HALF - FRAME + 18, off)
-		var b := Vector2(HALF + FRAME - 18, off)
-		var xf := Transform2D(g[0] * PI / 2, Vector2.ZERO)
-		draw_line(xf * a, xf * b, g[2], g[3])
-	draw_rect(Rect2(-HALF - 5, -HALF - 5, HALF * 2 + 10, HALF * 2 + 10), WOOD_DARK)  # cushion edge
-	draw_rect(Rect2(-HALF, -HALF, HALF * 2, HALF * 2), PLY)
+	var sheen := StyleBoxFlat.new()  # lacquer catching the light along the outer edge
+	sheen.draw_center = false
+	sheen.border_color = Color(1, 0.85, 0.65, 0.3)
+	sheen.set_border_width_all(3)
+	sheen.set_corner_radius_all(18)
+	sheen.anti_aliasing = true
+	draw_style_box(sheen, outer.grow(-6))
+	_draw_brackets()
+	draw_rect(Rect2(-HALF - 12, -HALF - 12, HALF * 2 + 24, HALF * 2 + 24), WOOD_DARK)  # inner step
+	draw_rect(Rect2(-HALF - 4, -HALF - 4, HALF * 2 + 8, HALF * 2 + 8), WOOD.darkened(0.45))  # cushion edge
+	# honey surface, lighter toward the middle: a fan of triangles with vertex colors
+	var n := 64
+	for k in n:
+		var a := _square_point(k * TAU / n)
+		var b := _square_point((k + 1) * TAU / n)
+		draw_polygon(PackedVector2Array([Vector2.ZERO, a, b]), PackedColorArray([PLY_CENTER, PLY, PLY]))
 	for g in _grain:
 		draw_polyline(g[0], g[1], g[2], true)
 	# a soft inner shade along the cushions
 	for k in 4:
 		var xf := Transform2D(k * PI / 2, Vector2.ZERO)
 		draw_colored_polygon(PackedVector2Array([xf * Vector2(-HALF, -HALF), xf * Vector2(HALF, -HALF),
-			xf * Vector2(HALF - 14, -HALF + 14), xf * Vector2(-HALF + 14, -HALF + 14)]), Color(0.35, 0.2, 0.08, 0.12))
+			xf * Vector2(HALF - 16, -HALF + 16), xf * Vector2(-HALF + 16, -HALF + 16)]), Color(0.45, 0.2, 0.05, 0.16))
+
+
+## Where a ray from the center at `angle` meets the playing area's edge.
+func _square_point(angle: float) -> Vector2:
+	var d := Vector2.from_angle(angle)
+	return d * HALF / maxf(absf(d.x), absf(d.y))
+
+
+## Raised L-shaped plates on the frame corners, each with a little scroll past its ends.
+func _draw_brackets() -> void:
+	var plate := StyleBoxFlat.new()
+	plate.bg_color = WOOD.darkened(0.08)
+	plate.border_color = WOOD.lightened(0.25)
+	plate.border_width_top = 3
+	plate.set_corner_radius_all(8)
+	plate.shadow_color = Color(0, 0, 0, 0.25)
+	plate.shadow_size = 4
+	plate.shadow_offset = Vector2(2, 3)
+	plate.anti_aliasing = true
+	var e := -HALF - FRAME
+	for k in 4:
+		draw_set_transform(Vector2.ZERO, k * PI / 2)
+		draw_style_box(plate, Rect2(e, e, 150, FRAME - 10))
+		draw_style_box(plate, Rect2(e, e, FRAME - 10, 150))
+		draw_arc(Vector2(e + 172, e + 15), 7, -PI * 0.2, PI * 1.3, 14, WOOD_DARK, 2.5, true)
+		draw_arc(Vector2(e + 183, e + 4), 5, PI * 0.8, PI * 2.3, 12, WOOD_DARK, 2.5, true)
+		draw_arc(Vector2(e + 15, e + 172), 7, -PI * 0.2, PI * 1.3, 14, WOOD_DARK, 2.5, true)
+		draw_arc(Vector2(e + 4, e + 183), 5, PI * 0.8, PI * 2.3, 12, WOOD_DARK, 2.5, true)
+	draw_set_transform(Vector2.ZERO)
 
 
 func _draw_markings() -> void:
 	var outer_line := 1000.0 - 137.0 - HALF
 	var inner_line := 1000.0 - 180.0 - HALF
+	var mid := (outer_line + inner_line) / 2
 	var end := 317.5
 	var circle_r := 21.5
 	for k in 4:
 		var xf := Transform2D(k * PI / 2, Vector2.ZERO)
-		draw_line(xf * Vector2(-end + circle_r, outer_line), xf * Vector2(end - circle_r, outer_line), LINE, 3.0, true)
-		draw_line(xf * Vector2(-end + circle_r, inner_line), xf * Vector2(end - circle_r, inner_line), LINE, 2.0, true)
+		# baseline lane: a capsule between the two lines with a colored circle at each end
+		var lane := PackedVector2Array()
+		for i in 13:
+			lane.append(xf * (Vector2(end - circle_r, mid) + Vector2.from_angle(-PI / 2 + i * PI / 12) * circle_r))
+		for i in 13:
+			lane.append(xf * (Vector2(-end + circle_r, mid) + Vector2.from_angle(PI / 2 + i * PI / 12) * circle_r))
+		draw_colored_polygon(lane, Color(1, 0.97, 0.88, 0.3))
+		lane.append(lane[0])
+		draw_polyline(lane, LINE, 2.5, true)
+		var dot: Color = BASE_GREEN if k % 2 == 0 else RED
 		for sx in [-1.0, 1.0]:
-			var c: Vector2 = xf * Vector2(sx * (end - circle_r), (outer_line + inner_line) / 2)
-			draw_circle(c, circle_r + 2, LINE)
-			draw_circle(c, circle_r - 1, RED)
-			draw_circle(c, circle_r * 0.45, Color(1, 1, 1, 0.25))
-		# diagonal arrow from the pocket toward the center, ending in an arc
+			var c: Vector2 = xf * Vector2(sx * (end - circle_r), mid)
+			draw_circle(c, circle_r - 2, dot.darkened(0.3))
+			draw_circle(c, circle_r - 5, dot)
+			draw_arc(c, circle_r - 8, PI * 0.9, PI * 1.6, 10, Color(1, 1, 1, 0.3), 2.5, true)
+		# diagonal arrow from the middle toward the pocket: fletching, shaft, spear head
 		var dirv: Vector2 = xf * Vector2(1, 1).normalized()
-		var tail := dirv * 470.0 * 0.66
-		var tip := dirv * (HALF * 1.414 - 95)
+		var side := dirv.orthogonal() * 10
+		var tail := dirv * 300.0
+		var tip := dirv * (HALF * 1.414 - 100)
 		draw_line(tail, tip, LINE, 2.5, true)
-		var side := dirv.orthogonal() * 9
-		draw_colored_polygon(PackedVector2Array([tip + dirv * 4, tip - dirv * 18 + side, tip - dirv * 18 - side]), LINE)
-		draw_arc(tail - dirv * 26, 26, dirv.angle() - 1.25, dirv.angle() + 1.25, 16, LINE, 2.5, true)
-	# center: outer circle and a red rosette round the queen's spot
-	draw_arc(Vector2.ZERO, 115, 0, TAU, 72, LINE, 2.5, true)
-	draw_arc(Vector2.ZERO, 108, 0, TAU, 72, LINE, 1.2, true)
-	var star := PackedVector2Array()
+		draw_colored_polygon(PackedVector2Array([tip + dirv * 16, tip - dirv * 4 + side, tip - dirv * 22, tip - dirv * 4 - side]), LINE)
+		for f in [14.0, 26.0]:
+			var at: Vector2 = tail + dirv * f
+			draw_polyline(PackedVector2Array([at - dirv * 12 + side, at, at - dirv * 12 - side]), LINE, 2.5, true)
+	# center: ring with compass ticks, a band of diamonds, and a faceted compass rose
+	draw_arc(Vector2.ZERO, 118, 0, TAU, 72, LINE, 2.5, true)
+	for k in 8:
+		var d := Vector2.from_angle(k * PI / 4 - PI / 2)
+		var o := d.orthogonal() * 7
+		draw_colored_polygon(PackedVector2Array([d * 134, d * 118 + o, d * 118 - o]), LINE)
 	for k in 16:
-		star.append(Vector2.from_angle(k * PI / 8) * (98.0 if k % 2 == 0 else 38.0))
-	draw_colored_polygon(star, Color(RED, 0.55))
-	star.append(star[0])
-	draw_polyline(star, LINE, 2.0, true)
-	draw_circle(Vector2.ZERO, 30, PLY)
-	draw_arc(Vector2.ZERO, 30, 0, TAU, 36, RED, 3.0, true)
-	draw_arc(Vector2.ZERO, 22, 0, TAU, 36, LINE, 1.5, true)
+		var d := Vector2.from_angle((k + 0.5) * PI / 8)
+		var c := d * 98
+		var o := d.orthogonal() * 3.5
+		draw_colored_polygon(PackedVector2Array([c + d * 7, c + o, c - d * 7, c - o]), Color(LINE, 0.75))
+	for k in [1, 3, 5, 7, 0, 2, 4, 6]:  # short points first so the long ones lie on top
+		var d := Vector2.from_angle(k * PI / 4 - PI / 2)
+		var o := d.orthogonal() * (17.0 if k % 2 == 0 else 12.0)
+		var tip := d * (88.0 if k % 2 == 0 else 54.0)
+		draw_colored_polygon(PackedVector2Array([Vector2.ZERO, tip, o]), LINE.lightened(0.3))
+		draw_colored_polygon(PackedVector2Array([Vector2.ZERO, tip, -o]), LINE)
+	draw_circle(Vector2.ZERO, 12, PLY_CENTER)
+	draw_arc(Vector2.ZERO, 12, 0, TAU, 24, LINE, 2.0, true)
 
 
-## A pocket; `bulge` 0..1 swells the net once and lets it settle (sin bump).
+## A pocket; `bulge` 0..1 swells a dark ring once and lets it settle (sin bump) as a coin drops.
 func _draw_pocket(at: Vector2, bulge := 0.0) -> void:
 	var r := Physics.POCKET_R + 3
 	var swell := sin(bulge * PI) * (1.0 - bulge * 0.5)
-	draw_circle(at, r + 4, WOOD_DARK)
-	draw_circle(at, r, Color("16110e"))
-	var net := Color(1, 1, 1, 0.12 + 0.18 * swell)
-	for k in 3:  # net rings and threads, stretched toward the rim while it bulges
-		draw_arc(at, r * (0.3 + k * 0.25) * (1.0 + 0.3 * swell), 0, TAU, 24, net, 1.5, true)
-	for k in 6:
-		var d := Vector2.from_angle(k * PI / 3 + 0.3)
-		draw_line(at + d * r * 0.15, at + d * (r - 2), net, 1.5, true)
+	draw_circle(at, r + 6, Color(0.4, 0.18, 0.05, 0.3))  # worn wood round the hole
+	draw_circle(at, r + 1, Color("3a1d0e"))
+	for i in 4:  # deeper toward the middle, the lip's shadow falling down into it
+		draw_circle(at + Vector2(0, i * 1.5), r * (1.0 - i * 0.18), Color("24130a").lerp(Color("050302"), i / 3.0))
+	draw_arc(at, r, PI * 0.15, PI * 0.85, 16, Color(1, 0.85, 0.6, 0.3), 2.0, true)
 	if swell > 0.0:
-		draw_circle(at, r * 0.32 * swell, Color(0, 0, 0, 0.5))
+		draw_arc(at, r * (0.5 + 0.35 * swell), 0, TAU, 24, Color(0, 0, 0, 0.6 * swell), 5.0, true)
 
 
-## One carrom piece with its shadow. `rot` turns its pattern (pieces spin while they slide).
-static func draw_piece(ci: CanvasItem, at: Vector2, kind: int, rot := 0.0, scale := 1.0, alpha := 1.0, bad := false) -> void:
+## One carrom piece with its shadow: rim, bevel, a carved flower and a shine. `rot` turns the
+## carving (pieces spin while they slide). `glow` puts a gold halo round it (the striker in play).
+static func draw_piece(ci: CanvasItem, at: Vector2, kind: int, rot := 0.0, scale := 1.0, alpha := 1.0, bad := false, glow := false) -> void:
 	var r := Physics.radius(kind) * scale
 	var body: Color = Color("ff5a5a") if bad else KIND_COLORS[kind]
-	var dark := body.darkened(0.35) if kind != Physics.BLACK else Color("120c0a")
-	var mark := body.darkened(0.2) if kind in [Physics.WHITE, Physics.STRIKER] else body.lightened(0.25)
-	if kind == Physics.QUEEN:  # gold rim and white rings: never mistaken for a board marking
-		dark = QUEEN_RIM
-		mark = Color(1, 1, 1, 0.9)
-	ci.draw_circle(at + Vector2(3, 5) * scale, r + 1, Color(0, 0, 0, 0.28 * alpha))
-	ci.draw_circle(at, r, Color(dark, alpha))
+	var rim := body.darkened(0.3)
+	var carve := body.darkened(0.2)
+	if kind == Physics.BLACK:
+		rim = Color("120c0a")
+		carve = body.lightened(0.22)
+	elif kind == Physics.QUEEN:  # gold rim and white flower: never mistaken for a board marking
+		rim = QUEEN_RIM
+		carve = Color(1, 1, 1, 0.85)
+	if glow:
+		ci.draw_circle(at, r + 12 * scale, Color(QUEEN_RIM, 0.2 * alpha))
+		ci.draw_arc(at, r + 6 * scale, 0, TAU, 40, Color(QUEEN_RIM, 0.9 * alpha), 3.0 * scale, true)
+	ci.draw_circle(at + Vector2(2, 5) * scale, r + 2 * scale, Color(0, 0, 0, 0.12 * alpha))  # soft shadow
+	ci.draw_circle(at + Vector2(1.5, 3) * scale, r, Color(0, 0, 0, 0.25 * alpha))
+	ci.draw_circle(at, r, Color(rim, alpha))
 	ci.draw_circle(at, r - (4.0 if kind == Physics.QUEEN else 2.5) * scale, Color(body, alpha))
-	ci.draw_circle(at + Vector2(-r * 0.22, -r * 0.25), r * 0.55, Color(1, 1, 1, 0.12 * alpha))  # shine
-	if kind == Physics.STRIKER:
-		var ring: Color = Color("b3122a") if bad else STRIKER_RING
-		ci.draw_arc(at, r * 0.72, 0, TAU, 32, Color(ring, alpha), 4.0 * scale, true)
-		ci.draw_arc(at, r * 0.42, 0, TAU, 24, Color(ring, alpha), 2.5 * scale, true)
-		for k in 4:
-			ci.draw_circle(at + Vector2.from_angle(rot + k * PI / 2) * r * 0.57, 2.6 * scale, Color(ring, alpha))
-		ci.draw_circle(at, r * 0.16, Color(ring, alpha))
-		return
-	ci.draw_arc(at, r * 0.62, 0, TAU, 28, Color(mark, alpha), 2.5 * scale, true)
-	for k in 6:  # grooves between the rings show the spin
-		var d := Vector2.from_angle(rot + k * PI / 3)
-		ci.draw_line(at + d * r * 0.66, at + d * r * 0.82, Color(mark, alpha), 2.0 * scale, true)
-	ci.draw_circle(at, r * 0.22, Color(mark, alpha))
+	# bevel: lit top-left edge, shaded bottom-right
+	ci.draw_arc(at, r - 4 * scale, PI * 0.75, PI * 1.75, 20, Color(1, 1, 1, 0.35 * alpha), 2.0 * scale, true)
+	ci.draw_arc(at, r - 4 * scale, -PI * 0.25, PI * 0.75, 20, Color(0, 0, 0, 0.18 * alpha), 2.0 * scale, true)
+	if kind == Physics.STRIKER:  # a green and red mandala
+		var green := Color("b3122a") if bad else Color("2e8b57")
+		var red := Color("d8402f")
+		ci.draw_arc(at, r * 0.8, 0, TAU, 36, Color(green.darkened(0.25), alpha), 2.0 * scale, true)
+		for k in 8:
+			var d := Vector2.from_angle(rot + k * PI / 4)
+			ci.draw_circle(at + d * r * 0.42, r * 0.15, Color(green, alpha))  # teardrop petal
+			ci.draw_circle(at + d * r * 0.58, r * 0.1, Color(green, alpha))
+			ci.draw_circle(at + Vector2.from_angle(rot + (k + 0.5) * PI / 4) * r * 0.66, r * 0.05, Color(red, alpha))
+		ci.draw_circle(at, r * 0.24, Color(red, alpha))
+		ci.draw_circle(at, r * 0.11, Color(QUEEN_RIM, alpha))
+	else:
+		ci.draw_arc(at, r * 0.8, 0, TAU, 32, Color(carve, alpha), 1.5 * scale, true)  # groove
+		if kind == Physics.BLACK:
+			ci.draw_arc(at, r * 0.66, 0, TAU, 28, Color(carve, 0.6 * alpha), 1.5 * scale, true)
+		for k in 8:
+			ci.draw_circle(at + Vector2.from_angle(rot + k * PI / 4) * r * 0.42, r * 0.13, Color(carve, 0.9 * alpha))
+		ci.draw_circle(at, r * 0.22, Color(body, alpha))
+		ci.draw_circle(at, r * 0.13, Color(carve, alpha))
+	ci.draw_circle(at + Vector2(-r * 0.2, -r * 0.22), r * 0.55, Color(1, 1, 1, 0.08 * alpha))  # shine
+	ci.draw_circle(at + Vector2(-r * 0.38, -r * 0.42), r * 0.16, Color(1, 1, 1, 0.35 * alpha))
 
 
 func _draw_aim() -> void:

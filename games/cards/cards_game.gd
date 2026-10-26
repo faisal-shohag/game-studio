@@ -28,7 +28,7 @@ const MY_SPOT := Vector2(30, 1290)  # your portrait, bottom-left
 const TABLE_Y := 1000.0
 const HAND_Y := 1690.0
 const HAND_SCALE := 1.1
-const LAST_AT := Vector2(955, 1395)  # center of the round LAST CARD button
+const LAST_AT := Vector2(955, 1395)  # center of the round UNO button
 
 ## Seat type per color: "human", "bot", "off", or "remote" (played on another phone).
 ## Set before adding to tree. For LAN games set `owners` instead.
@@ -188,7 +188,7 @@ func _build(colors: Array) -> void:
 	pass_btn.pressed.connect(func(): if _my_turn(): _intent({"do": "pass"}, me))
 	pass_btn.hide()
 	hud.add_child(pass_btn)
-	last_btn = _round_button("LAST\nCARD!", UI.COLORS[0], 190)
+	last_btn = _round_button("UNO!", UI.COLORS[0], 190)
 	last_btn.position = LAST_AT + Vector2(0, _oy) - last_btn.size / 2
 	last_btn.pressed.connect(func(): if _my_turn(): _intent({"do": "last"}, me))
 	last_btn.visible = me != -1
@@ -199,7 +199,7 @@ func _build(colors: Array) -> void:
 	hud.add_child(back)
 
 
-## Big round chunky button (LAST CARD!): dim and inert until it can be used.
+## Big round chunky button (UNO!): dim and inert until it can be used.
 func _round_button(text: String, color: Color, d: float) -> Button:
 	var b := UI.button(text, color, Vector2(d, d), 40)
 	b.size = Vector2(d, d)
@@ -515,7 +515,7 @@ func _animate(ev: Dictionary, v: Dictionary) -> void:
 			Sfx.play("no_move", 0.0)
 		"last":
 			Sfx.play("home", 0.0)
-			_popup("LAST CARD!", col, true)
+			_popup("UNO!", col, true)
 			await get_tree().create_timer(0.6).timeout
 		"catch":
 			Sfx.play("capture")

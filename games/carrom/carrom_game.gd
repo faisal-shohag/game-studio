@@ -25,9 +25,10 @@ const WinOverlay = preload("res://games/shared/win_overlay.gd")
 const Fx = preload("res://games/shared/fx.gd")
 const Games = preload("res://core/games.gd")
 const BOARD_AT := Vector2(540, 1000)
-## Opponent portraits (top-left corner) by side relative to the bottom one: right, across, left.
-const SPOTS := {1: Vector2(870, 250), 2: Vector2(465, 210), 3: Vector2(60, 250)}
-const MY_SPOT := Vector2(30, 1700)
+## Team banners over the board: your side on the left (red), the others on the right (green).
+const BANNERS := [Rect2(30, 175, 495, 265), Rect2(555, 175, 495, 265)]
+const BANNER_COLORS := [Color("d8574a"), Color("3f9a5a")]
+const BANNER_GOLD := Color("f2b84b")
 const SLIDER_Y := 1625.0
 const SLIDER_X := [130.0, 950.0]  # thumb travel on screen
 const GRAB := 95.0  # how close to the striker a touch starts aiming
@@ -59,6 +60,7 @@ var table := Node2D.new()  # shaken on hard shots
 var board := Board.new()
 var hud := Control.new()
 var players := {}  # seat -> Seat
+var banners := Control.new()
 var slider := Control.new()
 var hint := Label.new()
 var status := Label.new()
@@ -134,6 +136,10 @@ func _build(colors: Array) -> void:
 	hud.size = get_viewport_rect().size
 	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(hud)
+	banners.size = hud.size
+	banners.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banners.draw.connect(_draw_banners)
+	hud.add_child(banners)
 	for c in colors:
 		var seat := Seat.new()
 		seat.color = UI.COLORS[c]
@@ -150,12 +156,12 @@ func _build(colors: Array) -> void:
 	slider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slider.draw.connect(_draw_slider)
 	hud.add_child(slider)
-	hint.position = Vector2(200, 1715 + _oy)
+	hint.position = Vector2(110, 1715 + _oy)
 	hint.size = Vector2(860, 70)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 46)
 	hud.add_child(hint)
-	status.position = Vector2(200, 1790 + _oy)
+	status.position = Vector2(110, 1790 + _oy)
 	status.size = Vector2(860, 56)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status.add_theme_font_size_override("font_size", 34)
@@ -178,13 +184,22 @@ func on_back() -> void:
 		_to_menu()
 
 
-## Puts seat `base` at the bottom of the screen (fixed for the game) and the others round it.
+## Puts seat `base` at the bottom of the screen (fixed for the game) and the portraits in the
+## banners: base (and the partner across, with four players) on the left, the rest on the right.
 func _turn_board(base: int) -> void:
 	_base = base
 	board.rotation = base * PI / 2
+	var sides := [[], []]
 	for c in players:
 		var rel := posmod(c - base, 4)
-		players[c].position = (MY_SPOT if rel == 0 else SPOTS[rel]) + Vector2(0, _oy)
+		sides[0 if rel == 0 or (rel == 2 and players.size() == 4) else 1].append(c)
+	for k in 2:
+		var side: Array = sides[k]
+		side.sort_custom(func(a, b): return posmod(a - base, 4) < posmod(b - base, 4))
+		var b: Rect2 = BANNERS[k]
+		for i in side.size():
+			var cx := b.position.x + b.size.x * (i + 0.5) / side.size()
+			players[side[i]].position = Vector2(cx - Seat.PORTRAIT / 2, b.position.y + 45 + _oy)
 
 
 ## Redraws everything from `view` (no animation).
@@ -605,21 +620,58 @@ static func _wall_distance(at: Vector2, d: Vector2) -> float:
 	return maxf(best, 0.0)
 
 
+## Team banners: a gold rod each hangs from, a lacquered panel with a gold border and side studs.
+func _draw_banners() -> void:
+	for k in 2:
+		var b: Rect2 = BANNERS[k]
+		b.position.y += _oy
+		var col: Color = BANNER_COLORS[k]
+		var rod_y := b.position.y + 6
+		banners.draw_line(Vector2(b.position.x - 4, rod_y), Vector2(b.end.x + 4, rod_y), BANNER_GOLD.darkened(0.2), 8)
+		for x in [b.position.x - 4, b.end.x + 4]:
+			banners.draw_colored_polygon(PackedVector2Array([Vector2(x - 14, rod_y), Vector2(x, rod_y - 10),
+				Vector2(x + 14, rod_y), Vector2(x, rod_y + 10)]), BANNER_GOLD)
+		var panel := StyleBoxFlat.new()
+		panel.bg_color = col
+		panel.border_color = BANNER_GOLD
+		panel.set_border_width_all(6)
+		panel.set_corner_radius_all(26)
+		panel.shadow_color = Color(0, 0, 0, 0.3)
+		panel.shadow_size = 8
+		panel.shadow_offset = Vector2(0, 6)
+		panel.anti_aliasing = true
+		banners.draw_style_box(panel, b.grow_individual(0, -12, 0, 0))
+		var inner := StyleBoxFlat.new()
+		inner.bg_color = col.lightened(0.12)
+		inner.set_corner_radius_all(18)
+		inner.anti_aliasing = true
+		banners.draw_style_box(inner, b.grow_individual(-16, -28, -16, -16))
+		for x in [b.position.x, b.end.x]:
+			banners.draw_circle(Vector2(x, b.get_center().y), 14, BANNER_GOLD)
+			banners.draw_circle(Vector2(x, b.get_center().y), 8, col.darkened(0.2))
+
+
+## A wooden bar like the board's frame, with the striker riding on it.
 func _draw_slider() -> void:
 	var r := Rect2(Vector2(20, 22), Vector2(slider.size.x - 40, 46))
-	var pill := StyleBoxFlat.new()
-	pill.bg_color = Color(0, 0, 0, 0.3)
-	pill.set_corner_radius_all(23)
-	pill.anti_aliasing = true
-	slider.draw_style_box(pill, r)
+	var bar := StyleBoxFlat.new()
+	bar.bg_color = Board.PLY
+	bar.border_color = Board.WOOD
+	bar.set_border_width_all(7)
+	bar.set_corner_radius_all(23)
+	bar.shadow_color = Color(0, 0, 0, 0.3)
+	bar.shadow_size = 6
+	bar.shadow_offset = Vector2(0, 4)
+	bar.anti_aliasing = true
+	slider.draw_style_box(bar, r)
+	slider.draw_line(Vector2(45, 36), Vector2(slider.size.x - 45, 36), Color(1, 1, 1, 0.35), 3)  # sheen
 	for k in 9:  # tick marks
 		var tx := 70 + k * (slider.size.x - 140) / 8.0
-		slider.draw_line(Vector2(tx, 36), Vector2(tx, 54), Color(1, 1, 1, 0.2), 3)
+		slider.draw_line(Vector2(tx, 40), Vector2(tx, 52), Color(Board.LINE, 0.4), 3)
 	var t := inverse_lerp(Rules.BASE_MIN, Rules.BASE_MAX, _x)
 	if not _slider_forward():
 		t = 1.0 - t
 	var x := 70 + t * (slider.size.x - 140)
-	slider.draw_circle(Vector2(x, 45), 46, UI.INK)
 	Board.draw_piece(slider, Vector2(x, 45), Physics.STRIKER, 0.0, 1.45, 1.0, not _aim_ok)
 
 
